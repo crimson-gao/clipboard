@@ -11,19 +11,39 @@ use std::{
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use clipboard_rs::{Clipboard, ClipboardContext};
 use clipboard_watcher::{Body, ClipboardEventListener};
+#[cfg(target_os = "macos")]
+use core_graphics::{
+    event::{CGEvent, CGEventFlags, CGEventTapLocation, CGKeyCode},
+    event_source::{CGEventSource, CGEventSourceStateID},
+};
 use futures_util::StreamExt;
 use html2text::from_read;
 use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
+#[cfg(target_os = "macos")]
+use objc2_app_kit::{
+    NSApplicationActivationOptions, NSMainMenuWindowLevel, NSRunningApplication, NSWindow,
+    NSWindowCollectionBehavior, NSWorkspace,
+};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use tauri::{
+    menu::MenuBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, State, WebviewWindow,
+};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 pub const CLIPS_CHANGED_EVENT: &str = "clips:changed";
+pub const OPEN_SETTINGS_EVENT: &str = "open-settings";
 const DEFAULT_PAGE_SIZE: usize = 30;
 const RETENTION_HOURS: i64 = 24 * 7;
 const CLEANUP_INTERVAL_SECS: u64 = 60 * 60;
+const DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+S";
+const LEGACY_DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+V";
+const TRAY_ID: &str = "main-tray";
+pub const TRAY_SETTINGS_MENU_ID: &str = "tray-settings";
+pub const TRAY_QUIT_MENU_ID: &str = "tray-quit";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +67,17 @@ pub struct ClipItem {
 pub struct WindowState {
     pub is_pinned: bool,
     pub shortcut: String,
+    pub shortcut_enabled: bool,
+    pub show_tray_icon: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayDebugState {
+    pub level: i64,
+    pub collection_behavior: u64,
+    pub hides_on_deactivate: bool,
+    pub visible: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -83,13 +114,17 @@ struct PersistedStore {
     data_version: i64,
     is_pinned: bool,
     shortcut: Option<String>,
+    #[serde(default = "default_shortcut_enabled")]
+    shortcut_enabled: bool,
+    #[serde(default = "default_show_tray_icon")]
+    show_tray_icon: bool,
 }
 
 pub struct ClipboardState {
     path: PathBuf,
     inner: Mutex<PersistedStore>,
     thumbnail_cache: Mutex<HashMap<String, Vec<u8>>>,
-    suppressed_keys: Mutex<HashSet<String>>,
+    last_target_app_pid: Mutex<Option<i32>>,
 }
 
 impl ClipboardState {
@@ -98,12 +133,15 @@ impl ClipboardState {
         fs::create_dir_all(&app_dir)?;
         let path = app_dir.join("clipboard-store.json");
         let mut inner = load_store(&path);
+        if inner.shortcut.is_none() || inner.shortcut.as_deref() == Some(LEGACY_DEFAULT_SHORTCUT) {
+            inner.shortcut = Some(DEFAULT_SHORTCUT.to_string());
+        }
         let changed = prune_expired_clips(&mut inner);
         let state = Self {
             path,
             inner: Mutex::new(inner),
             thumbnail_cache: Mutex::new(HashMap::new()),
-            suppressed_keys: Mutex::new(HashSet::new()),
+            last_target_app_pid: Mutex::new(None),
         };
         if changed {
             let store = state.inner.lock().map_err(|_| tauri::Error::AssetNotFound("lock failed".into()))?;
@@ -138,12 +176,22 @@ fn load_store(path: &Path) -> PersistedStore {
             next_id: 1,
             data_version: 1,
             is_pinned: false,
-            shortcut: Some("CommandOrControl+Shift+V".to_string()),
+            shortcut: Some(DEFAULT_SHORTCUT.to_string()),
+            shortcut_enabled: true,
+            show_tray_icon: true,
         })
 }
 
 fn default_data_version() -> i64 {
     1
+}
+
+fn default_shortcut_enabled() -> bool {
+    true
+}
+
+fn default_show_tray_icon() -> bool {
+    true
 }
 
 fn now_iso() -> String {
@@ -156,7 +204,9 @@ fn current_window_state(store: &PersistedStore) -> WindowState {
         shortcut: store
             .shortcut
             .clone()
-            .unwrap_or_else(|| "CommandOrControl+Shift+V".to_string()),
+            .unwrap_or_else(|| DEFAULT_SHORTCUT.to_string()),
+        shortcut_enabled: store.shortcut_enabled,
+        show_tray_icon: store.show_tray_icon,
     }
 }
 
@@ -199,6 +249,266 @@ fn matches_query(clip: &ClipItem, query: Option<&str>) -> bool {
 
 fn emit_clips_changed(app: &AppHandle) {
     let _ = app.emit(CLIPS_CHANGED_EVENT, ());
+}
+
+pub fn emit_open_settings(app: &AppHandle) {
+    let _ = app.emit(OPEN_SETTINGS_EVENT, ());
+}
+
+#[cfg(target_os = "macos")]
+fn with_main_ns_window<T>(
+    app: &AppHandle,
+    f: impl FnOnce(&NSWindow) -> T,
+) -> Result<T, String> {
+    let Some(window) = app.get_webview_window("main") else {
+        return Err("main window not found".to_string());
+    };
+    let ns_window = window.ns_window().map_err(|error| error.to_string())?;
+    let ns_window = ns_window.cast::<NSWindow>();
+    let ns_window = unsafe { ns_window.as_ref() }
+        .ok_or_else(|| "failed to resolve NSWindow".to_string())?;
+    Ok(f(ns_window))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn with_main_ns_window<T>(
+    _app: &AppHandle,
+    _f: impl FnOnce(&()) -> T,
+) -> Result<T, String> {
+    Err("macOS only".to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn apply_main_window_overlay(app: &AppHandle, hides_on_deactivate: bool) -> Result<(), String> {
+    with_main_ns_window(app, |ns_window| {
+        let collection_behavior =
+            ns_window.collectionBehavior()
+                | NSWindowCollectionBehavior::CanJoinAllSpaces
+                | NSWindowCollectionBehavior::FullScreenAuxiliary;
+
+        ns_window.setLevel(NSMainMenuWindowLevel + 1);
+        ns_window.setCollectionBehavior(collection_behavior);
+        ns_window.setHidesOnDeactivate(hides_on_deactivate);
+    })?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn apply_main_window_overlay(_app: &AppHandle, _hides_on_deactivate: bool) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn order_main_window_front(app: &AppHandle) -> Result<(), String> {
+    with_main_ns_window(app, |ns_window| {
+        ns_window.orderFrontRegardless();
+    })?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn order_main_window_front(_app: &AppHandle) -> Result<(), String> {
+    Ok(())
+}
+
+pub fn init_main_window_overlay(app: &AppHandle) {
+    let hides_on_deactivate = app
+        .state::<ClipboardState>()
+        .inner
+        .lock()
+        .map(|store| !store.is_pinned)
+        .unwrap_or(true);
+
+    let _ = apply_main_window_overlay(app, hides_on_deactivate);
+}
+
+pub fn main_window_should_auto_hide(app: &AppHandle) -> bool {
+    app.state::<ClipboardState>()
+        .inner
+        .lock()
+        .map(|store| !store.is_pinned)
+        .unwrap_or(false)
+}
+
+pub fn hide_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+pub fn show_main_window(app: &AppHandle, remember_target: bool) {
+    if remember_target {
+        let state = app.state::<ClipboardState>();
+        let _ = remember_frontmost_application(&state);
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let is_pinned = app
+            .state::<ClipboardState>()
+            .inner
+            .lock()
+            .map(|store| store.is_pinned)
+            .unwrap_or(false);
+        let _ = apply_main_window_overlay(app, !is_pinned);
+        let _ = window.unminimize();
+        let _ = window.show();
+        if !is_pinned {
+            let _ = window.set_focus();
+        }
+        let _ = order_main_window_front(app);
+    }
+}
+
+fn toggle_main_window(app: &AppHandle, remember_target: bool) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            hide_main_window(app);
+        } else {
+            show_main_window(app, remember_target);
+        }
+    }
+}
+
+pub fn ensure_tray_icon(app: &AppHandle, visible: bool) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        tray.set_visible(visible).map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    if !visible {
+        return Ok(());
+    }
+
+    let Some(icon) = app.default_window_icon().cloned() else {
+        return Ok(());
+    };
+    let app_handle = app.clone();
+    let menu = MenuBuilder::new(app)
+        .text(TRAY_SETTINGS_MENU_ID, "设置")
+        .separator()
+        .text(TRAY_QUIT_MENU_ID, "退出")
+        .build()
+        .map_err(|error| error.to_string())?;
+
+    TrayIconBuilder::with_id(TRAY_ID)
+        .menu(&menu)
+        .icon(icon)
+        .show_menu_on_left_click(false)
+        .tooltip("Clipboard")
+        .on_tray_icon_event(move |_tray, event| {
+            if matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                }
+            ) {
+                toggle_main_window(&app_handle, true);
+            }
+        })
+        .build(app)
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn configure_shell(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<ClipboardState>();
+    let show_tray_icon = state
+        .inner
+        .lock()
+        .map_err(|error| error.to_string())?
+        .show_tray_icon;
+    ensure_tray_icon(app, show_tray_icon)?;
+    configure_shortcut(app)
+}
+
+#[cfg(target_os = "macos")]
+fn current_process_pid() -> i32 {
+    std::process::id() as i32
+}
+
+#[cfg(target_os = "macos")]
+fn frontmost_application_pid() -> Option<i32> {
+    let workspace = NSWorkspace::sharedWorkspace();
+    workspace
+        .frontmostApplication()
+        .map(|application| application.processIdentifier())
+}
+
+#[cfg(target_os = "macos")]
+fn remember_frontmost_application(state: &ClipboardState) -> Result<(), String> {
+    let pid = frontmost_application_pid().filter(|pid| *pid != current_process_pid());
+    let mut last_target_app_pid = state
+        .last_target_app_pid
+        .lock()
+        .map_err(|error| error.to_string())?;
+    *last_target_app_pid = pid;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn remember_frontmost_application(_state: &ClipboardState) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn activate_application(pid: i32) -> Result<bool, String> {
+    let Some(application) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) else {
+        return Ok(false);
+    };
+    Ok(application.activateWithOptions(NSApplicationActivationOptions::empty()))
+}
+
+#[cfg(target_os = "macos")]
+fn post_command_v() -> Result<(), String> {
+    const COMMAND_KEY_CODE: CGKeyCode = 55;
+    const V_KEY_CODE: CGKeyCode = 9;
+
+    let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
+        .map_err(|_| "failed to create event source".to_string())?;
+
+    let command_down = CGEvent::new_keyboard_event(source.clone(), COMMAND_KEY_CODE, true)
+        .map_err(|_| "failed to create command down event".to_string())?;
+    let v_down = CGEvent::new_keyboard_event(source.clone(), V_KEY_CODE, true)
+        .map_err(|_| "failed to create v down event".to_string())?;
+    let v_up = CGEvent::new_keyboard_event(source.clone(), V_KEY_CODE, false)
+        .map_err(|_| "failed to create v up event".to_string())?;
+    let command_up = CGEvent::new_keyboard_event(source, COMMAND_KEY_CODE, false)
+        .map_err(|_| "failed to create command up event".to_string())?;
+
+    v_down.set_flags(CGEventFlags::CGEventFlagCommand);
+    v_up.set_flags(CGEventFlags::CGEventFlagCommand);
+
+    command_down.post(CGEventTapLocation::HID);
+    v_down.post(CGEventTapLocation::HID);
+    v_up.post(CGEventTapLocation::HID);
+    command_up.post(CGEventTapLocation::HID);
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn post_command_v() -> Result<(), String> {
+    Ok(())
+}
+
+fn paste_into_previous_application(state: &ClipboardState) {
+    #[cfg(target_os = "macos")]
+    {
+        let target_pid = state
+            .last_target_app_pid
+            .lock()
+            .ok()
+            .and_then(|guard| *guard);
+
+        thread::spawn(move || {
+            if let Some(pid) = target_pid {
+                let _ = activate_application(pid);
+                thread::sleep(Duration::from_millis(120));
+            }
+            let _ = post_command_v();
+        });
+    }
 }
 
 fn retention_cutoff() -> DateTime<Utc> {
@@ -260,31 +570,12 @@ fn build_counts(store: &PersistedStore) -> ClipCounts {
     counts
 }
 
-fn suppression_key(kind: &str, content_text: &str, file_paths: &[String]) -> String {
-    match kind {
-        "file" => format!("file:{}", file_paths.join("\n")),
-        "image" => format!("image:{content_text}"),
-        _ => format!("text:{content_text}"),
-    }
-}
-
 fn clip_copy_text(clip: &ClipItem) -> String {
     if clip.kind == "file" {
         clip.file_paths.join("\n")
     } else {
         clip.content_text.clone()
     }
-}
-
-fn insert_suppression_key(state: &ClipboardState, key: String) -> Result<(), String> {
-    let mut suppressed = state.suppressed_keys.lock().map_err(|error| error.to_string())?;
-    suppressed.insert(key);
-    Ok(())
-}
-
-fn should_suppress(state: &ClipboardState, key: &str) -> Result<bool, String> {
-    let mut suppressed = state.suppressed_keys.lock().map_err(|error| error.to_string())?;
-    Ok(suppressed.remove(key))
 }
 
 fn upsert_clip_item(
@@ -458,10 +749,6 @@ fn handle_plain_text(state: &ClipboardState, text: String) -> Result<bool, Strin
     if preserved.is_empty() {
         return Ok(false);
     }
-    let key = suppression_key("text", &preserved, &[]);
-    if should_suppress(state, &key)? {
-        return Ok(false);
-    }
 
     let mut store = state.inner.lock().map_err(|error| error.to_string())?;
     let changed = upsert_clip_item(
@@ -490,10 +777,6 @@ fn handle_file_list(state: &ClipboardState, files: Vec<PathBuf>) -> Result<bool,
     }
 
     let summary = file_paths.join("\n");
-    let key = suppression_key("file", &summary, &file_paths);
-    if should_suppress(state, &key)? {
-        return Ok(false);
-    }
 
     let mut store = state.inner.lock().map_err(|error| error.to_string())?;
     let changed = upsert_clip_item(
@@ -565,10 +848,6 @@ fn handle_png_image(
         .map(|image| (image.width() as i32, image.height() as i32));
     let (image_width, image_height) = dimensions.unwrap_or((0, 0));
     let summary = format!("{image_width} x {image_height}");
-    let key = suppression_key("image", &summary, &[]);
-    if should_suppress(state, &key)? {
-        return Ok(false);
-    }
 
     let mut store = state.inner.lock().map_err(|error| error.to_string())?;
     let changed = upsert_clip_item(
@@ -754,19 +1033,22 @@ pub fn toggle_favorite(
 #[tauri::command]
 pub fn copy_clip(
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, ClipboardState>,
     id: i64,
 ) -> Result<bool, String> {
-    let store = state.inner.lock().map_err(|error| error.to_string())?;
-    let Some(clip) = store.clips.iter().find(|clip| clip.id == id) else {
-        return Ok(false);
+    let (text, is_pinned) = {
+        let store = state.inner.lock().map_err(|error| error.to_string())?;
+        let Some(clip) = store.clips.iter().find(|clip| clip.id == id) else {
+            return Ok(false);
+        };
+        (clip_copy_text(clip), store.is_pinned)
     };
 
-    let text = clip_copy_text(clip);
-    let key = suppression_key(&clip.kind, &text, &clip.file_paths);
-    insert_suppression_key(&state, key)?;
-
     app.clipboard().write_text(text).map_err(|error| error.to_string())?;
+    if !is_pinned {
+        let _ = window.hide();
+    }
     Ok(true)
 }
 
@@ -777,9 +1059,12 @@ pub fn paste_clip_and_hide(
     state: State<'_, ClipboardState>,
     id: i64,
 ) -> Result<bool, String> {
-    let copied = copy_clip(app, state, id)?;
+    let copied = copy_clip(app, window.clone(), state.clone(), id)?;
     if copied {
-        let _ = window.hide();
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        }
+        paste_into_previous_application(&state);
     }
     Ok(copied)
 }
@@ -858,21 +1143,92 @@ pub fn show_clip_in_finder(
 
 #[tauri::command]
 pub fn toggle_pin_window(
+    app: AppHandle,
     window: WebviewWindow,
     state: State<'_, ClipboardState>,
 ) -> Result<WindowState, String> {
     let mut store = state.inner.lock().map_err(|error| error.to_string())?;
     store.is_pinned = !store.is_pinned;
-    window
-        .set_always_on_top(store.is_pinned)
-        .map_err(|error| error.to_string())?;
+    let hides_on_deactivate = !store.is_pinned;
     let response = current_window_state(&store);
     state.save(&store).map_err(|error| error.to_string())?;
+    drop(store);
+    let _ = window.set_visible_on_all_workspaces(true);
+    apply_main_window_overlay(&app, hides_on_deactivate)?;
     Ok(response)
 }
 
 #[tauri::command]
 pub fn get_window_state(state: State<'_, ClipboardState>) -> Result<WindowState, String> {
+    let store = state.inner.lock().map_err(|error| error.to_string())?;
+    Ok(current_window_state(&store))
+}
+
+#[tauri::command]
+pub fn get_overlay_debug_state(window: WebviewWindow) -> Result<OverlayDebugState, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let ns_window = window.ns_window().map_err(|error| error.to_string())?;
+        let ns_window = ns_window.cast::<NSWindow>();
+        let ns_window = unsafe { ns_window.as_ref() }
+            .ok_or_else(|| "failed to resolve NSWindow".to_string())?;
+
+        return Ok(OverlayDebugState {
+            level: ns_window.level() as i64,
+            collection_behavior: ns_window.collectionBehavior().0 as u64,
+            hides_on_deactivate: ns_window.hidesOnDeactivate(),
+            visible: window.is_visible().map_err(|error| error.to_string())?,
+        });
+    }
+
+    #[allow(unreachable_code)]
+    Err("macOS only".to_string())
+}
+
+#[tauri::command]
+pub fn debug_show_main_window(app: AppHandle) -> Result<(), String> {
+    show_main_window(&app, false);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn debug_hide_main_window(window: WebviewWindow) -> Result<(), String> {
+    window.hide().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn update_window_settings(
+    app: AppHandle,
+    state: State<'_, ClipboardState>,
+    shortcut: String,
+    shortcut_enabled: bool,
+    show_tray_icon: bool,
+) -> Result<WindowState, String> {
+    let normalized_shortcut = shortcut.trim().to_string();
+    if shortcut_enabled {
+        if normalized_shortcut.is_empty() {
+            return Err("快捷键不能为空".to_string());
+        }
+        let _ = normalized_shortcut
+            .parse::<Shortcut>()
+            .map_err(|error| error.to_string())?;
+    }
+
+    {
+        let mut store = state.inner.lock().map_err(|error| error.to_string())?;
+        store.shortcut = Some(if normalized_shortcut.is_empty() {
+            DEFAULT_SHORTCUT.to_string()
+        } else {
+            normalized_shortcut.clone()
+        });
+        store.shortcut_enabled = shortcut_enabled;
+        store.show_tray_icon = show_tray_icon;
+        state.save(&store).map_err(|error| error.to_string())?;
+    }
+
+    configure_shortcut(&app)?;
+    ensure_tray_icon(&app, show_tray_icon)?;
+
     let store = state.inner.lock().map_err(|error| error.to_string())?;
     Ok(current_window_state(&store))
 }
@@ -886,18 +1242,20 @@ pub fn configure_shortcut(app: &AppHandle) -> Result<(), String> {
     let shortcut = store
         .shortcut
         .clone()
-        .unwrap_or_else(|| "CommandOrControl+Shift+V".to_string());
+        .unwrap_or_else(|| DEFAULT_SHORTCUT.to_string());
+    let shortcut_enabled = store.shortcut_enabled;
     drop(store);
-    let shortcut = shortcut.parse::<Shortcut>().map_err(|error| error.to_string())?;
+    app.global_shortcut().unregister_all().map_err(|error| error.to_string())?;
+    if !shortcut_enabled {
+        return Ok(());
+    }
 
-    app.global_shortcut().on_shortcut(shortcut, move |app, _, _| {
-        if let Some(window) = app.get_webview_window("main") {
-            if window.is_visible().unwrap_or(false) {
-                let _ = window.hide();
-            } else {
-                let _ = window.show();
-            }
+    let shortcut = shortcut.parse::<Shortcut>().map_err(|error| error.to_string())?;
+    app.global_shortcut().on_shortcut(shortcut, move |app, _, event| {
+        if event.state != ShortcutState::Pressed {
+            return;
         }
+        toggle_main_window(app, true);
     }).map_err(|error| error.to_string())?;
 
     Ok(())

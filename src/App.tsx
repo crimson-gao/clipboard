@@ -9,7 +9,7 @@ type Category = {
   key: CategoryKey;
   label: string;
   count?: number;
-  icon: JSX.Element;
+  icon: (active: boolean) => JSX.Element;
 };
 
 const PAGE_SIZE = 30;
@@ -194,6 +194,7 @@ function App() {
   const queryRef = useRef('');
   const filterRef = useRef<ClipFilter>('all');
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const rowRefs = useRef<Record<number, HTMLElement | null>>({});
   const tabStateRef = useRef<Record<string, TabSnapshot>>({});
   const [searchText, setSearchText] = useState('');
   const [query, setQuery] = useState('');
@@ -215,6 +216,11 @@ function App() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<number | null>(null);
   const [expandedClipIds, setExpandedClipIds] = useState<number[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutDraft, setShortcutDraft] = useState('');
+  const [shortcutEnabledDraft, setShortcutEnabledDraft] = useState(true);
+  const [showTrayIconDraft, setShowTrayIconDraft] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const filter: ClipFilter =
     activeCategory === 'favorite' ? 'favorite' : activeCategory === 'all' ? 'all' : activeCategory;
@@ -262,6 +268,16 @@ function App() {
   }, [query, filter]);
 
   useEffect(() => {
+    if (!settingsOpen || !windowState) {
+      return;
+    }
+
+    setShortcutDraft(windowState.shortcut);
+    setShortcutEnabledDraft(windowState.shortcutEnabled);
+    setShowTrayIconDraft(windowState.showTrayIcon);
+  }, [settingsOpen, windowState]);
+
+  useEffect(() => {
     void clipboardApi.getWindowState().then(setWindowState);
     void refreshCounts();
     void loadClips();
@@ -269,9 +285,28 @@ function App() {
     const unsubscribeClips = clipboardApi.subscribeClipsChanged(() => {
       void refreshCounts();
     });
+    const unsubscribeOpenSettings = clipboardApi.subscribeOpenSettings(() => {
+      setSettingsOpen(true);
+    });
+    const unsubscribeFocusChanged = clipboardApi.subscribeFocusChanged((focused) => {
+      if (focused) {
+        return;
+      }
+
+      setWindowState((current) => {
+        if (!current || current.isPinned) {
+          return current;
+        }
+
+        void clipboardApi.hideMainWindow();
+        return current;
+      });
+    });
 
     return () => {
       unsubscribeClips();
+      unsubscribeOpenSettings();
+      unsubscribeFocusChanged();
     };
   }, []);
 
@@ -340,8 +375,9 @@ function App() {
     {
       key: 'all',
       label: '全部',
-      icon: (
+      icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
+          {active ? <rect x="6" y="5" width="12" height="15" rx="2" fill="currentColor" opacity="0.18" /> : null}
           <rect x="6" y="5" width="12" height="15" rx="2" />
           <path d="M9 9h6M9 13h6M15 3v4M9 3v4" />
         </svg>
@@ -351,9 +387,9 @@ function App() {
       key: 'text',
       label: '文本',
       count: counts.text,
-      icon: (
+      icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 7h12M12 7v10M9 17h6" />
+          {active ? <path d="M5 6h14v2H13v9h-2V8H5z" fill="currentColor" /> : <path d="M6 7h12M12 7v10M9 17h6" />}
         </svg>
       ),
     },
@@ -361,10 +397,11 @@ function App() {
       key: 'image',
       label: '图像',
       count: counts.image,
-      icon: (
+      icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
+          {active ? <rect x="4.5" y="5.5" width="15" height="13" rx="2" fill="currentColor" opacity="0.18" /> : null}
           <rect x="4.5" y="5.5" width="15" height="13" rx="2" />
-          <circle cx="10" cy="10" r="1.25" />
+          <circle cx="10" cy="10" r="1.25" fill={active ? 'currentColor' : 'none'} />
           <path d="M7.5 16l3.2-3.3 2.7 2.6 2-2.1 2.3 2.8" />
         </svg>
       ),
@@ -373,8 +410,9 @@ function App() {
       key: 'file',
       label: '文件',
       count: counts.file,
-      icon: (
+      icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
+          {active ? <path d="M8 4.5h6l3 3V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" fill="currentColor" opacity="0.18" /> : null}
           <path d="M8 4.5h6l3 3V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
           <path d="M14 4.5v4h4" />
         </svg>
@@ -384,9 +422,12 @@ function App() {
       key: 'favorite',
       label: '收藏',
       count: counts.favorite,
-      icon: (
+      icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
+          <path
+            d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z"
+            fill={active ? 'currentColor' : 'none'}
+          />
         </svg>
       ),
     },
@@ -451,6 +492,49 @@ function App() {
     setWindowState(next);
   };
 
+  useEffect(() => {
+    if (!settingsOpen || !windowState) {
+      return;
+    }
+
+    const normalizedShortcutDraft = shortcutDraft.trim();
+    const currentShortcut = windowState.shortcut.trim();
+    const unchanged =
+      normalizedShortcutDraft === currentShortcut &&
+      shortcutEnabledDraft === windowState.shortcutEnabled &&
+      showTrayIconDraft === windowState.showTrayIcon;
+
+    if (unchanged) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSettingsSaving(true);
+      void clipboardApi
+        .updateWindowSettings(
+          normalizedShortcutDraft,
+          shortcutEnabledDraft,
+          showTrayIconDraft,
+        )
+        .then((next) => {
+          setWindowState(next);
+        })
+        .finally(() => {
+          setSettingsSaving(false);
+        });
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    settingsOpen,
+    shortcutDraft,
+    shortcutEnabledDraft,
+    showTrayIconDraft,
+    windowState,
+  ]);
+
   const selectedFavoriteLabel = selectedClip?.isFavorite ? '取消收藏' : '收藏';
   const clearDisabled = activeCategory === 'favorite' || clips.length === 0 || busyId !== null;
 
@@ -460,29 +544,86 @@ function App() {
     );
   };
 
+  const setRowRef = (id: number, preloadRefCallback?: (node: HTMLElement | null) => void) =>
+    (node: HTMLElement | null) => {
+      rowRefs.current[id] = node;
+      preloadRefCallback?.(node);
+    };
+
   useEffect(() => {
     return () => {
       observerRef.current?.disconnect();
     };
   }, []);
 
+  useEffect(() => {
+    const selectedNode = selectedClipId ? rowRefs.current[selectedClipId] : null;
+    selectedNode?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [selectedClipId]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        settingsOpen ||
+        !selectedClip ||
+        (target &&
+          (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.isContentEditable))
+      ) {
+        return;
+      }
+
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const currentIndex = clips.findIndex((clip) => clip.id === selectedClip.id);
+        if (currentIndex === -1) {
+          return;
+        }
+
+        const nextIndex =
+          event.key === 'ArrowDown'
+            ? Math.min(clips.length - 1, currentIndex + 1)
+            : Math.max(0, currentIndex - 1);
+        setSelectedClipId(clips[nextIndex]?.id ?? selectedClip.id);
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void handlePasteAndHide(selectedClip.id);
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        void handleCopy(selectedClip.id);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [clips, selectedClip, settingsOpen]);
+
   return (
     <div className="app-shell">
       <div className="top-chrome">
         <header className="topbar">
-          <div className="traffic-space" aria-hidden="true" />
+          <div className="topbar-title-wrap">
+            <p className="topbar-title">剪切板</p>
+          </div>
 
           <label className="search-box">
-            <span className="brand-badge" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M6 5h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
-                <path d="M8 10h8M8 13h6" />
-                <path d="M13 8h3v3" />
-              </svg>
-            </span>
             <input
               type="text"
               value={searchText}
+              className={searchText ? 'has-value' : ''}
               placeholder="搜索..."
               onChange={(event) => {
                 setSearchText(event.target.value);
@@ -499,15 +640,17 @@ function App() {
           </label>
 
           <div className="topbar-actions">
-            <button type="button" className="ghost-icon" aria-label="提醒">
+            <button
+              type="button"
+              className={`ghost-icon${settingsOpen ? ' is-active' : ''}`}
+              aria-label="设置"
+              onClick={() => {
+                setSettingsOpen((current) => !current);
+              }}
+            >
               <svg viewBox="0 0 24 24">
-                <path d="M12 5a5 5 0 0 0-5 5v2.6L5.8 15A1 1 0 0 0 6.7 16.5h10.6a1 1 0 0 0 .9-1.5L17 12.6V10a5 5 0 0 0-5-5Z" />
-                <path d="M9.8 18a2.2 2.2 0 0 0 4.4 0" />
-              </svg>
-            </button>
-            <button type="button" className="ghost-icon" aria-label="菜单">
-              <svg viewBox="0 0 24 24">
-                <path d="M5 7h14M5 12h14M5 17h14" />
+                <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
+                <path d="m4.8 13.4 1.3.2a6.7 6.7 0 0 0 .6 1.4l-.8 1.1 1.8 1.8 1.1-.8c.5.3.9.5 1.4.6l.2 1.3h2.6l.2-1.3c.5-.1 1-.3 1.4-.6l1.1.8 1.8-1.8-.8-1.1c.3-.5.5-.9.6-1.4l1.3-.2v-2.6l-1.3-.2a6.7 6.7 0 0 0-.6-1.4l.8-1.1-1.8-1.8-1.1.8a6.7 6.7 0 0 0-1.4-.6L13.4 4h-2.6l-.2 1.3c-.5.1-1 .3-1.4.6l-1.1-.8-1.8 1.8.8 1.1c-.3.5-.5.9-.6 1.4l-1.3.2Z" />
               </svg>
             </button>
             <button
@@ -535,7 +678,7 @@ function App() {
                 setActiveCategory(item.key);
               }}
             >
-              <span className="category-icon">{item.icon}</span>
+              <span className="category-icon">{item.icon(activeCategory === item.key)}</span>
               <span>
                 {item.label}
                 {item.count && item.count > 0 ? ` (${item.count})` : ''}
@@ -565,8 +708,12 @@ function App() {
                   return (
                     <article
                       key={clip.id}
-                      ref={rowRef}
+                      ref={setRowRef(clip.id, rowRef)}
                       className={`entry-row entry-image${isSelected ? ' is-selected' : ''}`}
+                      tabIndex={-1}
+                      onFocus={() => {
+                        setSelectedClipId(clip.id);
+                      }}
                       onClick={() => {
                         setSelectedClipId(clip.id);
                       }}
@@ -600,8 +747,12 @@ function App() {
                   return (
                     <article
                       key={clip.id}
-                      ref={rowRef}
+                      ref={setRowRef(clip.id, rowRef)}
                       className={`entry-row entry-file${isSelected ? ' is-selected' : ''}`}
+                      tabIndex={-1}
+                      onFocus={() => {
+                        setSelectedClipId(clip.id);
+                      }}
                       onClick={() => {
                         setSelectedClipId(clip.id);
                       }}
@@ -671,8 +822,12 @@ function App() {
                 return (
                   <article
                     key={clip.id}
-                    ref={rowRef}
+                    ref={setRowRef(clip.id, rowRef)}
                     className={`entry-row entry-text${isSelected ? ' is-selected' : ''}`}
+                    tabIndex={-1}
+                    onFocus={() => {
+                      setSelectedClipId(clip.id);
+                    }}
                     onClick={() => {
                       setSelectedClipId(clip.id);
                     }}
@@ -806,6 +961,99 @@ function App() {
           <div className="utility-indicator">{loading ? '同步中' : `${clips.length} 条`}</div>
         </div>
       </main>
+
+      {settingsOpen ? (
+        <div
+          className="settings-modal-backdrop"
+          onClick={() => {
+            setSettingsOpen(false);
+          }}
+        >
+          <section
+            className="settings-modal"
+            aria-label="设置"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="settings-modal-header">
+              <div>
+                <p className="settings-modal-title">设置</p>
+                <span className="settings-modal-subtitle">修改后会自动保存</span>
+              </div>
+              <button
+                type="button"
+                className="settings-close"
+                aria-label="关闭设置"
+                onClick={() => {
+                  setSettingsOpen(false);
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="settings-card-grid">
+              <section className="settings-card">
+                <div className="settings-card-header">
+                  <div>
+                    <p className="settings-label">全局快捷键</p>
+                    <span className="settings-hint">默认使用 Cmd + Shift + S 呼出面板</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input
+                      type="checkbox"
+                      checked={shortcutEnabledDraft}
+                      onChange={(event) => {
+                        setShortcutEnabledDraft(event.target.checked);
+                      }}
+                    />
+                    <span>{shortcutEnabledDraft ? '已启用' : '已禁用'}</span>
+                  </label>
+                </div>
+
+                <label className="settings-input">
+                  <span>快捷键字符串</span>
+                  <input
+                    type="text"
+                    value={shortcutDraft}
+                    disabled={!shortcutEnabledDraft}
+                    onChange={(event) => {
+                      setShortcutDraft(event.target.value);
+                    }}
+                    placeholder="CommandOrControl+Shift+S"
+                  />
+                </label>
+              </section>
+
+              <section className="settings-card">
+                <div className="settings-card-header">
+                  <div>
+                    <p className="settings-label">菜单栏图标</p>
+                    <span className="settings-hint">点击 menu bar 图标也可以呼出面板</span>
+                  </div>
+                  <label className="settings-switch">
+                    <input
+                      type="checkbox"
+                      checked={showTrayIconDraft}
+                      onChange={(event) => {
+                        setShowTrayIconDraft(event.target.checked);
+                      }}
+                    />
+                    <span>{showTrayIconDraft ? '显示中' : '已隐藏'}</span>
+                  </label>
+                </div>
+              </section>
+            </div>
+
+            <div className="settings-status" aria-live="polite">
+              {settingsSaving ? '正在保存设置…' : '设置已同步'}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

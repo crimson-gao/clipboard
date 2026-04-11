@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  web:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Frontend checks
+        run: npm run check
+      - name: Playwright smoke tests
+        run: npm run test:e2e
+      - name: Rust checks
+        working-directory: src-tauri
+        run: cargo test && cargo clippy -- -D warnings

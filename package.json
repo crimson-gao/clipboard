@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run format && npm run lint && npm run test && npm run build:web",
+    "check": "npm run format && npm run lint && npm run typecheck && npm run test && npm run build:web",
     "preview": "vite preview",
     "tauri": "tauri"
   },

@@ -1,15 +1,24 @@
+mod clipboard;
 mod commands;
+mod events;
+mod models;
+mod shell;
+mod store;
+mod window;
 
 use commands::{
-    configure_shell, clear_current_clips, copy_clip, emit_open_settings, get_clip_counts,
-    get_clip_image_preview, get_window_state,
-    close_main_window, configure_main_window_overlay, list_clips_page, paste_clip_and_hide,
-    seed_debug_data, should_auto_hide_main_window, show_clip_in_finder, open_main_window, start_cleanup_scheduler,
-    start_clipboard_watcher, toggle_favorite, toggle_pin_window, update_window_settings,
-    ClipboardState,
-    TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID,
+    clear_current_clips, copy_clip, get_clip_counts, get_clip_image_preview, get_window_state,
+    list_clips_page, paste_clip_and_hide, show_clip_in_finder, toggle_favorite, toggle_pin_window,
+    update_window_settings,
 };
+use events::{TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID};
+use shell::{configure_shell, emit_open_settings};
+use store::ClipboardState;
 use tauri::{ActivationPolicy, Manager, WindowEvent};
+use window::{
+    close_main_window, configure_main_window_overlay, open_main_window,
+    should_auto_hide_main_window,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -37,10 +46,10 @@ pub fn run() {
                     api.prevent_close();
                     let _ = window.minimize();
                 }
-                WindowEvent::Focused(false) => {
-                    if should_auto_hide_main_window(&window.app_handle()) {
-                        close_main_window(&window.app_handle());
-                    }
+                WindowEvent::Focused(false)
+                    if should_auto_hide_main_window(window.app_handle()) =>
+                {
+                    close_main_window(window.app_handle());
                 }
                 _ => {}
             }
@@ -49,13 +58,12 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);
 
-            let state = ClipboardState::load(&app.handle())?;
-            seed_debug_data(&state)?;
+            let state = ClipboardState::load(app.handle())?;
             app.manage(state);
-            configure_main_window_overlay(&app.handle());
-            start_clipboard_watcher(app.handle().clone());
-            start_cleanup_scheduler(app.handle().clone());
-            if let Err(error) = configure_shell(&app.handle()) {
+            configure_main_window_overlay(app.handle());
+            clipboard::start_clipboard_watcher(app.handle().clone());
+            clipboard::start_cleanup_scheduler(app.handle().clone());
+            if let Err(error) = configure_shell(app.handle()) {
                 eprintln!("[shell] failed to configure shell integrations: {error}");
             }
             if cfg!(debug_assertions) {

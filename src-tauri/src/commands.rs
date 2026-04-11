@@ -73,15 +73,6 @@ pub struct WindowState {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OverlayDebugState {
-    pub level: i64,
-    pub collection_behavior: u64,
-    pub hides_on_deactivate: bool,
-    pub visible: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ClipCounts {
     pub text: usize,
     pub image: usize,
@@ -311,7 +302,7 @@ fn order_main_window_front(_app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-pub fn init_main_window_overlay(app: &AppHandle) {
+pub fn configure_main_window_overlay(app: &AppHandle) {
     let hides_on_deactivate = app
         .state::<ClipboardState>()
         .inner
@@ -322,7 +313,7 @@ pub fn init_main_window_overlay(app: &AppHandle) {
     let _ = apply_main_window_overlay(app, hides_on_deactivate);
 }
 
-pub fn main_window_should_auto_hide(app: &AppHandle) -> bool {
+pub fn should_auto_hide_main_window(app: &AppHandle) -> bool {
     app.state::<ClipboardState>()
         .inner
         .lock()
@@ -330,13 +321,13 @@ pub fn main_window_should_auto_hide(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-pub fn hide_main_window(app: &AppHandle) {
+pub fn close_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
     }
 }
 
-pub fn show_main_window(app: &AppHandle, remember_target: bool) {
+pub fn open_main_window(app: &AppHandle, remember_target: bool) {
     if remember_target {
         let state = app.state::<ClipboardState>();
         let _ = remember_frontmost_application(&state);
@@ -361,9 +352,9 @@ pub fn show_main_window(app: &AppHandle, remember_target: bool) {
 fn toggle_main_window(app: &AppHandle, remember_target: bool) {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_visible().unwrap_or(false) {
-            hide_main_window(app);
+            close_main_window(app);
         } else {
-            show_main_window(app, remember_target);
+            open_main_window(app, remember_target);
         }
     }
 }
@@ -1162,38 +1153,6 @@ pub fn toggle_pin_window(
 pub fn get_window_state(state: State<'_, ClipboardState>) -> Result<WindowState, String> {
     let store = state.inner.lock().map_err(|error| error.to_string())?;
     Ok(current_window_state(&store))
-}
-
-#[tauri::command]
-pub fn get_overlay_debug_state(window: WebviewWindow) -> Result<OverlayDebugState, String> {
-    #[cfg(target_os = "macos")]
-    {
-        let ns_window = window.ns_window().map_err(|error| error.to_string())?;
-        let ns_window = ns_window.cast::<NSWindow>();
-        let ns_window = unsafe { ns_window.as_ref() }
-            .ok_or_else(|| "failed to resolve NSWindow".to_string())?;
-
-        return Ok(OverlayDebugState {
-            level: ns_window.level() as i64,
-            collection_behavior: ns_window.collectionBehavior().0 as u64,
-            hides_on_deactivate: ns_window.hidesOnDeactivate(),
-            visible: window.is_visible().map_err(|error| error.to_string())?,
-        });
-    }
-
-    #[allow(unreachable_code)]
-    Err("macOS only".to_string())
-}
-
-#[tauri::command]
-pub fn debug_show_main_window(app: AppHandle) -> Result<(), String> {
-    show_main_window(&app, false);
-    Ok(())
-}
-
-#[tauri::command]
-pub fn debug_hide_main_window(window: WebviewWindow) -> Result<(), String> {
-    window.hide().map_err(|error| error.to_string())
 }
 
 #[tauri::command]

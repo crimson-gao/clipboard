@@ -23,6 +23,12 @@ type TabSnapshot = {
   lastLoadedVersion: number;
 };
 
+type SettingsDraft = {
+  shortcut: string;
+  shortcutEnabled: boolean;
+  showTrayIcon: boolean;
+};
+
 const EMPTY_TAB_SNAPSHOT: TabSnapshot = {
   items: [],
   offset: 0,
@@ -103,6 +109,22 @@ function getClipMeta(clip: ClipItem): string {
   }
 
   return `${clip.contentText.length} 字符`;
+}
+
+function buildSettingsDraft(windowState: WindowState): SettingsDraft {
+  return {
+    shortcut: windowState.shortcut,
+    shortcutEnabled: windowState.shortcutEnabled,
+    showTrayIcon: windowState.showTrayIcon,
+  };
+}
+
+function hasSettingsDraftChanges(windowState: WindowState, draft: SettingsDraft): boolean {
+  return (
+    draft.shortcut.trim() !== windowState.shortcut.trim() ||
+    draft.shortcutEnabled !== windowState.shortcutEnabled ||
+    draft.showTrayIcon !== windowState.showTrayIcon
+  );
 }
 
 function ClipImagePreview({ clip }: { clip: ClipItem }) {
@@ -217,9 +239,11 @@ function App() {
   const [selectedClipId, setSelectedClipId] = useState<number | null>(null);
   const [expandedClipIds, setExpandedClipIds] = useState<number[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [shortcutDraft, setShortcutDraft] = useState('');
-  const [shortcutEnabledDraft, setShortcutEnabledDraft] = useState(true);
-  const [showTrayIconDraft, setShowTrayIconDraft] = useState(true);
+  const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>({
+    shortcut: '',
+    shortcutEnabled: true,
+    showTrayIcon: true,
+  });
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const filter: ClipFilter =
@@ -272,9 +296,7 @@ function App() {
       return;
     }
 
-    setShortcutDraft(windowState.shortcut);
-    setShortcutEnabledDraft(windowState.shortcutEnabled);
-    setShowTrayIconDraft(windowState.showTrayIcon);
+    setSettingsDraft(buildSettingsDraft(windowState));
   }, [settingsOpen, windowState]);
 
   useEffect(() => {
@@ -288,25 +310,10 @@ function App() {
     const unsubscribeOpenSettings = clipboardApi.subscribeOpenSettings(() => {
       setSettingsOpen(true);
     });
-    const unsubscribeFocusChanged = clipboardApi.subscribeFocusChanged((focused) => {
-      if (focused) {
-        return;
-      }
-
-      setWindowState((current) => {
-        if (!current || current.isPinned) {
-          return current;
-        }
-
-        void clipboardApi.hideMainWindow();
-        return current;
-      });
-    });
 
     return () => {
       unsubscribeClips();
       unsubscribeOpenSettings();
-      unsubscribeFocusChanged();
     };
   }, []);
 
@@ -497,14 +504,7 @@ function App() {
       return;
     }
 
-    const normalizedShortcutDraft = shortcutDraft.trim();
-    const currentShortcut = windowState.shortcut.trim();
-    const unchanged =
-      normalizedShortcutDraft === currentShortcut &&
-      shortcutEnabledDraft === windowState.shortcutEnabled &&
-      showTrayIconDraft === windowState.showTrayIcon;
-
-    if (unchanged) {
+    if (!hasSettingsDraftChanges(windowState, settingsDraft)) {
       return;
     }
 
@@ -512,9 +512,9 @@ function App() {
       setSettingsSaving(true);
       void clipboardApi
         .updateWindowSettings(
-          normalizedShortcutDraft,
-          shortcutEnabledDraft,
-          showTrayIconDraft,
+          settingsDraft.shortcut.trim(),
+          settingsDraft.shortcutEnabled,
+          settingsDraft.showTrayIcon,
         )
         .then((next) => {
           setWindowState(next);
@@ -529,9 +529,7 @@ function App() {
     };
   }, [
     settingsOpen,
-    shortcutDraft,
-    shortcutEnabledDraft,
-    showTrayIconDraft,
+    settingsDraft,
     windowState,
   ]);
 
@@ -1005,12 +1003,15 @@ function App() {
                   <label className="settings-switch">
                     <input
                       type="checkbox"
-                      checked={shortcutEnabledDraft}
+                      checked={settingsDraft.shortcutEnabled}
                       onChange={(event) => {
-                        setShortcutEnabledDraft(event.target.checked);
+                        setSettingsDraft((current) => ({
+                          ...current,
+                          shortcutEnabled: event.target.checked,
+                        }));
                       }}
                     />
-                    <span>{shortcutEnabledDraft ? '已启用' : '已禁用'}</span>
+                    <span>{settingsDraft.shortcutEnabled ? '已启用' : '已禁用'}</span>
                   </label>
                 </div>
 
@@ -1018,10 +1019,13 @@ function App() {
                   <span>快捷键字符串</span>
                   <input
                     type="text"
-                    value={shortcutDraft}
-                    disabled={!shortcutEnabledDraft}
+                    value={settingsDraft.shortcut}
+                    disabled={!settingsDraft.shortcutEnabled}
                     onChange={(event) => {
-                      setShortcutDraft(event.target.value);
+                      setSettingsDraft((current) => ({
+                        ...current,
+                        shortcut: event.target.value,
+                      }));
                     }}
                     placeholder="CommandOrControl+Shift+S"
                   />
@@ -1037,12 +1041,15 @@ function App() {
                   <label className="settings-switch">
                     <input
                       type="checkbox"
-                      checked={showTrayIconDraft}
+                      checked={settingsDraft.showTrayIcon}
                       onChange={(event) => {
-                        setShowTrayIconDraft(event.target.checked);
+                        setSettingsDraft((current) => ({
+                          ...current,
+                          showTrayIcon: event.target.checked,
+                        }));
                       }}
                     />
-                    <span>{showTrayIconDraft ? '显示中' : '已隐藏'}</span>
+                    <span>{settingsDraft.showTrayIcon ? '显示中' : '已隐藏'}</span>
                   </label>
                 </div>
               </section>

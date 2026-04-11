@@ -57,4 +57,4 @@ agno-agent-3.py
 - Finder 复制文件时，剪切板里同时包含“文件引用”和“图标预览”。
 - 正确判定应优先读取 `public.file-url` / `NSFilenamesPboardType` / `Apple URL pasteboard type`。
 - `public.tiff` 和 `com.apple.icns` 只是图标/预览，不能据此把条目判成 `image`。
-- 如果 Electron 自己的 `availableFormats()` 暴露不稳定，应优先走 macOS 原生 pasteboard 读取。
+- 如果 Web 层抽象暴露的格式信息不稳定，应优先走 macOS 原生 pasteboard 读取。

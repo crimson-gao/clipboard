@@ -23,6 +23,8 @@ export type ClipImagePreview = {
 export type WindowState = {
   isPinned: boolean;
   shortcut: string;
+  shortcutEnabled: boolean;
+  showTrayIcon: boolean;
 };
 
 export type ClipCounts = {

@@ -72,6 +72,35 @@ svg {
   stroke-linejoin: round;
 }
 
+.app-tooltip {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: white;
+  white-space: nowrap;
+  pointer-events: none;
+  border-radius: 8px;
+  background: rgba(52, 56, 72, 0.94);
+  box-shadow: 0 8px 20px rgba(40, 43, 54, 0.18);
+  z-index: 100;
+  animation: tooltip-fade-in 120ms ease 300ms both;
+}
+
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 4px));
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -164,9 +193,23 @@ input {
 .topbar-actions {
   display: flex;
   flex: 0 0 auto;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 8px;
   color: #9e9e9e;
+}
+
+.topbar-action-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.topbar-action-label {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: #8f93a0;
 }
 
 .ghost-icon {
@@ -197,6 +240,10 @@ input {
 .ghost-icon:hover {
   background: linear-gradient(180deg, #6c7cff, #5668ff);
   color: white;
+}
+
+.topbar-action-item .ghost-icon.is-active + .topbar-action-label {
+  color: var(--accent);
 }
 
 .category-strip {
@@ -855,10 +902,6 @@ input {
   font-weight: 700;
   color: #8f8f96;
   transition: color 140ms ease;
-}
-
-.tool-action:hover .tool-label {
-  color: white;
 }
 
 .tool-action:hover .fab-primary {

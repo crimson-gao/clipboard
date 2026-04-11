@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { FocusEvent, MouseEvent } from 'react';
 
 import { clipboardApi } from './lib/clipboard-api';
 import type { ClipCounts, ClipFilter, ClipItem, WindowState } from './types';
@@ -29,6 +30,12 @@ type SettingsDraft = {
   shortcut: string;
   shortcutEnabled: boolean;
   showTrayIcon: boolean;
+};
+
+type TooltipState = {
+  text: string;
+  x: number;
+  y: number;
 };
 
 const EMPTY_TAB_SNAPSHOT: TabSnapshot = {
@@ -247,6 +254,7 @@ function App() {
     showTrayIcon: true,
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   const filter: ClipFilter =
     activeCategory === 'favorite' ? 'favorite' : activeCategory === 'all' ? 'all' : activeCategory;
@@ -287,6 +295,33 @@ function App() {
       setBusyId(null);
     }
   };
+
+  const showTooltip = (text: string, x: number, y: number) => {
+    setTooltip({ text, x, y });
+  };
+
+  const hideTooltip = () => {
+    setTooltip(null);
+  };
+
+  const bindTooltip = (text: string) => ({
+    onMouseEnter: (event: MouseEvent<HTMLElement>) => {
+      showTooltip(text, event.clientX, event.clientY);
+    },
+    onMouseMove: (event: MouseEvent<HTMLElement>) => {
+      showTooltip(text, event.clientX, event.clientY);
+    },
+    onMouseLeave: () => {
+      hideTooltip();
+    },
+    onFocus: (event: FocusEvent<HTMLElement>) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      showTooltip(text, rect.left + rect.width / 2, rect.top);
+    },
+    onBlur: () => {
+      hideTooltip();
+    },
+  });
 
   useEffect(() => {
     queryRef.current = query;
@@ -656,31 +691,37 @@ function App() {
           </label>
 
           <div className="topbar-actions">
-            <button
-              type="button"
-              className={`ghost-icon${settingsOpen ? ' is-active' : ''}`}
-              aria-label="设置"
-              onClick={() => {
-                setSettingsOpen((current) => !current);
-              }}
-            >
-              <svg viewBox="0 0 24 24">
-                <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
-                <path d="m4.8 13.4 1.3.2a6.7 6.7 0 0 0 .6 1.4l-.8 1.1 1.8 1.8 1.1-.8c.5.3.9.5 1.4.6l.2 1.3h2.6l.2-1.3c.5-.1 1-.3 1.4-.6l1.1.8 1.8-1.8-.8-1.1c.3-.5.5-.9.6-1.4l1.3-.2v-2.6l-1.3-.2a6.7 6.7 0 0 0-.6-1.4l.8-1.1-1.8-1.8-1.1.8a6.7 6.7 0 0 0-1.4-.6L13.4 4h-2.6l-.2 1.3c-.5.1-1 .3-1.4.6l-1.1-.8-1.8 1.8.8 1.1c-.3.5-.5.9-.6 1.4l-1.3.2Z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className={`ghost-icon${windowState?.isPinned ? ' is-active' : ''}`}
-              aria-label="固定窗口"
-              onClick={() => {
-                void handleTogglePin();
-              }}
-            >
-              <svg viewBox="0 0 24 24">
-                <path d="m9 5 6 0 0 4 2.8 2.7-4.3.8-.2 6.5H10.7l-.2-6.5-4.3-.8L9 9Z" />
-              </svg>
-            </button>
+            <div className="topbar-action-item">
+              <button
+                type="button"
+                className={`ghost-icon${settingsOpen ? ' is-active' : ''}`}
+                aria-label="设置"
+                onClick={() => {
+                  setSettingsOpen((current) => !current);
+                }}
+              >
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
+                  <path d="m4.8 13.4 1.3.2a6.7 6.7 0 0 0 .6 1.4l-.8 1.1 1.8 1.8 1.1-.8c.5.3.9.5 1.4.6l.2 1.3h2.6l.2-1.3c.5-.1 1-.3 1.4-.6l1.1.8 1.8-1.8-.8-1.1c.3-.5.5-.9.6-1.4l1.3-.2v-2.6l-1.3-.2a6.7 6.7 0 0 0-.6-1.4l.8-1.1-1.8-1.8-1.1.8a6.7 6.7 0 0 0-1.4-.6L13.4 4h-2.6l-.2 1.3c-.5.1-1 .3-1.4.6l-1.1-.8-1.8 1.8.8 1.1c-.3.5-.5.9-.6 1.4l-1.3.2Z" />
+                </svg>
+              </button>
+              <span className="topbar-action-label">设置</span>
+            </div>
+            <div className="topbar-action-item">
+              <button
+                type="button"
+                className={`ghost-icon${windowState?.isPinned ? ' is-active' : ''}`}
+                aria-label="固定窗口"
+                onClick={() => {
+                  void handleTogglePin();
+                }}
+              >
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 5 6 0 0 4 2.8 2.7-4.3.8-.2 6.5H10.7l-.2-6.5-4.3-.8L9 9Z" />
+                </svg>
+              </button>
+              <span className="topbar-action-label">固定</span>
+            </div>
           </div>
         </header>
 
@@ -744,7 +785,7 @@ function App() {
                           <span>{meta}</span>
                           <div className="image-meta-right">
                             {clip.isFavorite ? (
-                              <span className="entry-star entry-star-inline" aria-label="已收藏">
+                              <span className="entry-star entry-star-inline" aria-label="已收藏" {...bindTooltip('已收藏')}>
                                 <svg viewBox="0 0 24 24" aria-hidden="true">
                                   <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
                                 </svg>
@@ -798,6 +839,7 @@ function App() {
                                 void navigator.clipboard.writeText(primaryFile);
                               }}
                               aria-label="复制路径"
+                              {...bindTooltip('复制路径')}
                             >
                               <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M9 7h8v10H9z" />
@@ -817,23 +859,24 @@ function App() {
                             void clipboardApi.showClipInFinder(clip.id);
                           }}
                           aria-label="在 Finder 中显示"
+                          {...bindTooltip('在 Finder 中显示')}
                         >
                           <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M7 7h10v10H7z" />
-                            <path d="M10 14 17 7" />
+                            <path d="M4.5 8.5h5l1.7 2h9.3v7a2 2 0 0 1-2 2h-12a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
+                            <path d="M4.5 10.5h16" />
                           </svg>
                         </button>
                         <div className="text-meta">
-                        {clip.isFavorite ? (
-                          <span className="entry-star entry-star-inline" aria-label="已收藏">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
-                            </svg>
-                          </span>
-                        ) : null}
-                        <span>{meta}</span>
-                        <span>{index + 1}</span>
-                      </div>
+                          {clip.isFavorite ? (
+                            <span className="entry-star entry-star-inline" aria-label="已收藏" {...bindTooltip('已收藏')}>
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
+                              </svg>
+                            </span>
+                          ) : null}
+                          <span>{meta}</span>
+                          <span>{index + 1}</span>
+                        </div>
                       </div>
                     </article>
                   );
@@ -880,7 +923,7 @@ function App() {
                         )}
                         <div className="text-meta">
                           {clip.isFavorite ? (
-                            <span className="entry-star entry-star-inline" aria-label="已收藏">
+                            <span className="entry-star entry-star-inline" aria-label="已收藏" {...bindTooltip('已收藏')}>
                               <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
                               </svg>
@@ -984,6 +1027,18 @@ function App() {
         </aside>
       </main>
 
+      {tooltip ? (
+        <div
+          className="app-tooltip"
+          style={{
+            left: tooltip.x,
+            top: tooltip.y - 10,
+          }}
+        >
+          {tooltip.text}
+        </div>
+      ) : null}
+
       {settingsOpen ? (
         <div
           className="settings-modal-backdrop"
@@ -1007,6 +1062,7 @@ function App() {
                 type="button"
                 className="settings-close"
                 aria-label="关闭设置"
+                {...bindTooltip('关闭设置')}
                 onClick={() => {
                   setSettingsOpen(false);
                 }}

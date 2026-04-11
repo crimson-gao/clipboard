@@ -1,8 +1,11 @@
 node_modules
 dist
+dist-electron
 .DS_Store
 .codex-page.png
 .shot-*.png
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+electron/*.js
+electron/*.d.ts

@@ -12,6 +12,8 @@ type Category = {
   icon: (active: boolean) => JSX.Element;
 };
 
+const CATEGORY_ORDER: CategoryKey[] = ['all', 'text', 'image', 'file', 'favorite'];
+
 const PAGE_SIZE = 30;
 
 type TabSnapshot = {
@@ -567,12 +569,28 @@ function App() {
       const target = event.target as HTMLElement | null;
       if (
         settingsOpen ||
-        !selectedClip ||
         (target &&
           (target.tagName === 'INPUT' ||
             target.tagName === 'TEXTAREA' ||
             target.isContentEditable))
       ) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        const currentIndex = CATEGORY_ORDER.indexOf(activeCategory);
+        if (currentIndex === -1) {
+          return;
+        }
+
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex = (currentIndex + delta + CATEGORY_ORDER.length) % CATEGORY_ORDER.length;
+        setActiveCategory(CATEGORY_ORDER[nextIndex] ?? activeCategory);
+        return;
+      }
+
+      if (!selectedClip) {
         return;
       }
 
@@ -607,7 +625,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [clips, selectedClip, settingsOpen]);
+  }, [activeCategory, clips, selectedClip, settingsOpen]);
 
   return (
     <div className="app-shell">
@@ -767,23 +785,11 @@ function App() {
                         </div>
                         <div className="file-copy">
                           <p className="entry-title">{getFileName(primaryFile)}</p>
-                          <p className="entry-time">{formatUpdatedAt(clip.updatedAt)}</p>
-                          <div className="file-hover-card">
-                            <button
-                              type="button"
-                              className="file-icon-link"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void clipboardApi.showClipInFinder(clip.id);
-                              }}
-                              aria-label="在 Finder 中显示"
-                            >
-                              <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M7 7h10v10H7z" />
-                                <path d="M10 14 17 7" />
-                              </svg>
-                            </button>
-                            <span className="file-path" title={primaryFile}>{primaryFile}</span>
+                          <div className="file-detail-row">
+                            <p className="entry-time">{formatUpdatedAt(clip.updatedAt)}</p>
+                          </div>
+                          <div className="file-path-row">
+                            <span className="file-path-inline" title={primaryFile}>{primaryFile}</span>
                             <button
                               type="button"
                               className="file-copy-button"
@@ -802,7 +808,22 @@ function App() {
                         </div>
                       </div>
 
-                      <div className="text-meta">
+                      <div className="file-side">
+                        <button
+                          type="button"
+                          className="file-icon-link"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void clipboardApi.showClipInFinder(clip.id);
+                          }}
+                          aria-label="在 Finder 中显示"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M7 7h10v10H7z" />
+                            <path d="M10 14 17 7" />
+                          </svg>
+                        </button>
+                        <div className="text-meta">
                         {clip.isFavorite ? (
                           <span className="entry-star entry-star-inline" aria-label="已收藏">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -812,6 +833,7 @@ function App() {
                         ) : null}
                         <span>{meta}</span>
                         <span>{index + 1}</span>
+                      </div>
                       </div>
                     </article>
                   );
@@ -877,87 +899,89 @@ function App() {
           )}
         </section>
 
-        <aside className="floating-toolbar" aria-label="右侧工具栏">
-          <button
-            type="button"
-            className="tool-action"
-            disabled={!selectedClip || busyId === selectedClip.id}
-            onClick={() => {
-              if (selectedClip) {
-                void handleCopy(selectedClip.id);
-              }
-            }}
-          >
-            <span className="fab fab-primary">
-              <svg viewBox="0 0 24 24">
-                <path d="M9 7h8v10H9z" />
-                <path d="M7 17H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
-              </svg>
-            </span>
-            <span className="tool-label">复制</span>
-          </button>
+        <aside className="right-rail" aria-label="右侧工具栏">
+          <div className="floating-toolbar">
+            <button
+              type="button"
+              className="tool-action"
+              disabled={!selectedClip || busyId === selectedClip.id}
+              onClick={() => {
+                if (selectedClip) {
+                  void handleCopy(selectedClip.id);
+                }
+              }}
+            >
+              <span className="fab fab-primary">
+                <svg viewBox="0 0 24 24">
+                  <path d="M9 7h8v10H9z" />
+                  <path d="M7 17H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+                </svg>
+              </span>
+              <span className="tool-label">复制</span>
+            </button>
 
-          <button
-            type="button"
-            className="tool-action"
-            disabled={!selectedClip || busyId === selectedClip.id}
-            onClick={() => {
-              if (selectedClip) {
-                void handlePasteAndHide(selectedClip.id);
-              }
-            }}
-          >
-            <span className="fab fab-muted">
-              <svg viewBox="0 0 24 24">
-                <path d="m9 7 8 5-8 5Z" />
-              </svg>
-            </span>
-            <span className="tool-label">粘贴</span>
-          </button>
+            <button
+              type="button"
+              className="tool-action"
+              disabled={!selectedClip || busyId === selectedClip.id}
+              onClick={() => {
+                if (selectedClip) {
+                  void handlePasteAndHide(selectedClip.id);
+                }
+              }}
+            >
+              <span className="fab fab-muted">
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 7 8 5-8 5Z" />
+                </svg>
+              </span>
+              <span className="tool-label">粘贴</span>
+            </button>
 
-          <button
-            type="button"
-            className="tool-action"
-            disabled={!selectedClip || busyId === selectedClip.id}
-            onClick={() => {
-              if (selectedClip) {
-                void handleToggleFavorite(selectedClip.id);
-              }
-            }}
-          >
-            <span className={`fab fab-favorite${selectedClip?.isFavorite ? ' is-active' : ''}`}>
-              <svg viewBox="0 0 24 24">
-                <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
-              </svg>
-            </span>
-            <span className="tool-label">{selectedFavoriteLabel}</span>
-          </button>
+            <button
+              type="button"
+              className="tool-action"
+              disabled={!selectedClip || busyId === selectedClip.id}
+              onClick={() => {
+                if (selectedClip) {
+                  void handleToggleFavorite(selectedClip.id);
+                }
+              }}
+            >
+              <span className={`fab fab-favorite${selectedClip?.isFavorite ? ' is-active' : ''}`}>
+                <svg viewBox="0 0 24 24">
+                  <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
+                </svg>
+              </span>
+              <span className="tool-label">{selectedFavoriteLabel}</span>
+            </button>
 
-          <button
-            type="button"
-            className="tool-action"
-            disabled={clearDisabled}
-            onClick={() => {
-              void handleClearCurrent();
-            }}
-          >
-            <span className="fab fab-muted">
-              <svg viewBox="0 0 24 24">
-                <path d="M5 7h14" />
-                <path d="M9 7V5.5h6V7" />
-                <path d="M8 10v7" />
-                <path d="M12 10v7" />
-                <path d="M16 10v7" />
-                <path d="M7 7l.8 11a2 2 0 0 0 2 1.8h4.4a2 2 0 0 0 2-1.8L17 7" />
-              </svg>
-            </span>
-            <span className="tool-label">清空</span>
-          </button>
+            <button
+              type="button"
+              className="tool-action"
+              disabled={clearDisabled}
+              onClick={() => {
+                void handleClearCurrent();
+              }}
+            >
+              <span className="fab fab-muted">
+                <svg viewBox="0 0 24 24">
+                  <path d="M5 7h14" />
+                  <path d="M9 7V5.5h6V7" />
+                  <path d="M8 10v7" />
+                  <path d="M12 10v7" />
+                  <path d="M16 10v7" />
+                  <path d="M7 7l.8 11a2 2 0 0 0 2 1.8h4.4a2 2 0 0 0 2-1.8L17 7" />
+                </svg>
+              </span>
+              <span className="tool-label">清空</span>
+            </button>
+          </div>
+
+          <div className="utility-rail" aria-hidden="true">
+            <div className="utility-indicator">{loading ? '同步中' : `${clips.length} 条`}</div>
+          </div>
         </aside>
-
-        <div className="utility-rail" aria-hidden="true">
-          <div className="utility-indicator">{loading ? '同步中' : `${clips.length} 条`}</div>
-        </div>
       </main>
 
       {settingsOpen ? (

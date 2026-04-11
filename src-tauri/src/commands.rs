@@ -279,6 +279,7 @@ fn apply_main_window_overlay(app: &AppHandle, hides_on_deactivate: bool) -> Resu
 
         ns_window.setLevel(NSMainMenuWindowLevel + 1);
         ns_window.setCollectionBehavior(collection_behavior);
+        ns_window.setAcceptsMouseMovedEvents(true);
         ns_window.setHidesOnDeactivate(hides_on_deactivate);
     })?;
     Ok(())
@@ -292,6 +293,7 @@ fn apply_main_window_overlay(_app: &AppHandle, _hides_on_deactivate: bool) -> Re
 #[cfg(target_os = "macos")]
 fn order_main_window_front(app: &AppHandle) -> Result<(), String> {
     with_main_ns_window(app, |ns_window| {
+        ns_window.makeKeyAndOrderFront(None);
         ns_window.orderFrontRegardless();
     })?;
     Ok(())
@@ -342,6 +344,8 @@ pub fn open_main_window(app: &AppHandle, remember_target: bool) {
         let _ = apply_main_window_overlay(app, !is_pinned);
         let _ = window.unminimize();
         let _ = window.show();
+        #[cfg(target_os = "macos")]
+        let _ = activate_application(current_process_pid());
         if !is_pinned {
             let _ = window.set_focus();
         }

@@ -1,8 +1,8 @@
 mod commands;
 
 use commands::{
-    clear_current_clips, configure_shortcut, copy_clip, get_clip_counts, get_window_state,
-    list_clips, list_clips_page, paste_clip_and_hide, seed_debug_data, show_clip_in_finder,
+    clear_current_clips, configure_shortcut, copy_clip, get_clip_counts, get_clip_image_preview,
+    get_window_state, list_clips_page, paste_clip_and_hide, seed_debug_data, show_clip_in_finder,
     start_cleanup_scheduler, start_clipboard_watcher, toggle_favorite, toggle_pin_window,
     ClipboardState,
 };
@@ -43,8 +43,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            list_clips,
             list_clips_page,
+            get_clip_image_preview,
             get_clip_counts,
             toggle_favorite,
             copy_clip,

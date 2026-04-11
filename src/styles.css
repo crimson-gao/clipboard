@@ -412,6 +412,12 @@ input {
   overflow: hidden;
 }
 
+.image-preview-placeholder {
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(241, 243, 249, 0.92), rgba(235, 238, 245, 0.92));
+}
+
 .image-preview img {
   width: auto;
   height: auto;

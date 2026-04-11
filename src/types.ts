@@ -13,7 +13,11 @@ export type ClipItem = {
   filePaths: string[];
   imageWidth: number | null;
   imageHeight: number | null;
-  previewDataUrl: string | null;
+};
+
+export type ClipImagePreview = {
+  bytes: number[];
+  mimeType: string;
 };
 
 export type WindowState = {

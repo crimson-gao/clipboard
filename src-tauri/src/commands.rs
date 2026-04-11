@@ -8,7 +8,6 @@ use std::{
     time::Duration,
 };
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use clipboard_rs::{Clipboard, ClipboardContext};
 use clipboard_watcher::{Body, ClipboardEventListener};
@@ -68,6 +67,13 @@ pub struct PaginatedClips {
     pub has_more: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipImagePreview {
+    pub bytes: Vec<u8>,
+    pub mime_type: String,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PersistedStore {
@@ -82,7 +88,7 @@ struct PersistedStore {
 pub struct ClipboardState {
     path: PathBuf,
     inner: Mutex<PersistedStore>,
-    thumbnail_cache: Mutex<HashMap<String, String>>,
+    thumbnail_cache: Mutex<HashMap<String, Vec<u8>>>,
     suppressed_keys: Mutex<HashSet<String>>,
 }
 
@@ -259,6 +265,14 @@ fn suppression_key(kind: &str, content_text: &str, file_paths: &[String]) -> Str
         "file" => format!("file:{}", file_paths.join("\n")),
         "image" => format!("image:{content_text}"),
         _ => format!("text:{content_text}"),
+    }
+}
+
+fn clip_copy_text(clip: &ClipItem) -> String {
+    if clip.kind == "file" {
+        clip.file_paths.join("\n")
+    } else {
+        clip.content_text.clone()
     }
 }
 
@@ -509,26 +523,30 @@ fn should_use_thumbnail(width: i32, height: i32) -> bool {
     width > 900 || height > 900 || width.saturating_mul(height) > 1_200_000
 }
 
-fn generate_thumbnail_data_url(state: &ClipboardState, content_path: &str) -> Result<Option<String>, String> {
+fn generate_preview_png_bytes(state: &ClipboardState, content_path: &str) -> Result<Vec<u8>, String> {
     {
         let cache = state.thumbnail_cache.lock().map_err(|error| error.to_string())?;
         if let Some(cached) = cache.get(content_path) {
-            return Ok(Some(cached.clone()));
+            return Ok(cached.clone());
         }
     }
 
     let image = image::open(content_path).map_err(|error| error.to_string())?;
-    let thumbnail = image.thumbnail(360, 220).to_rgba8();
-    let (width, height) = thumbnail.dimensions();
+    let preview = if should_use_thumbnail(image.width() as i32, image.height() as i32) {
+        image.thumbnail(360, 220)
+    } else {
+        image
+    }
+    .to_rgba8();
+    let (width, height) = preview.dimensions();
     let mut png_bytes = Vec::new();
     PngEncoder::new(&mut png_bytes)
-        .write_image(thumbnail.as_raw(), width, height, ColorType::Rgba8.into())
+        .write_image(preview.as_raw(), width, height, ColorType::Rgba8.into())
         .map_err(|error| error.to_string())?;
-    let data_url = format!("data:image/png;base64,{}", STANDARD.encode(&png_bytes));
 
     let mut cache = state.thumbnail_cache.lock().map_err(|error| error.to_string())?;
-    cache.insert(content_path.to_string(), data_url.clone());
-    Ok(Some(data_url))
+    cache.insert(content_path.to_string(), png_bytes.clone());
+    Ok(png_bytes)
 }
 
 fn handle_png_image(
@@ -546,11 +564,6 @@ fn handle_png_image(
         .ok()
         .map(|image| (image.width() as i32, image.height() as i32));
     let (image_width, image_height) = dimensions.unwrap_or((0, 0));
-    let preview_data_url = if should_use_thumbnail(image_width, image_height) {
-        None
-    } else {
-        Some(format!("data:image/png;base64,{}", STANDARD.encode(bytes)))
-    };
     let summary = format!("{image_width} x {image_height}");
     let key = suppression_key("image", &summary, &[]);
     if should_suppress(state, &key)? {
@@ -566,7 +579,7 @@ fn handle_png_image(
         Vec::new(),
         Some(image_width),
         Some(image_height),
-        preview_data_url,
+        None,
     );
     if changed {
         persist_store(state, &store)?;
@@ -643,15 +656,6 @@ pub fn start_cleanup_scheduler(app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn list_clips(
-    state: State<'_, ClipboardState>,
-    query: Option<String>,
-    filter: Option<String>,
-) -> Result<PaginatedClips, String> {
-    list_clips_page(state, query, filter, None, None)
-}
-
-#[tauri::command]
 pub fn list_clips_page(
     state: State<'_, ClipboardState>,
     query: Option<String>,
@@ -660,14 +664,12 @@ pub fn list_clips_page(
     limit: Option<usize>,
 ) -> Result<PaginatedClips, String> {
     let store = state.inner.lock().map_err(|error| error.to_string())?;
-    let matching_all = store
+    let mut clips = store
         .clips
-        .iter().filter(|clip| matches_query(clip, query.as_deref()))
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut clips = matching_all
-        .into_iter()
+        .iter()
+        .filter(|clip| matches_query(clip, query.as_deref()))
         .filter(|clip| matches_filter(clip, filter.as_deref()))
+        .cloned()
         .collect::<Vec<_>>();
     drop(store);
 
@@ -684,10 +686,9 @@ pub fn list_clips_page(
     };
 
     for clip in &mut paged_items {
-        if clip.kind == "image" && clip.preview_data_url.is_none() {
-            if let Some(content_path) = clip.content_path.as_deref() {
-                clip.preview_data_url = generate_thumbnail_data_url(&state, content_path)?;
-            }
+        if clip.kind == "image" {
+            clip.content_path = None;
+            clip.preview_data_url = None;
         }
     }
 
@@ -696,6 +697,30 @@ pub fn list_clips_page(
         total,
         has_more,
     })
+}
+
+#[tauri::command]
+pub fn get_clip_image_preview(
+    state: State<'_, ClipboardState>,
+    id: i64,
+) -> Result<Option<ClipImagePreview>, String> {
+    let content_path = {
+        let store = state.inner.lock().map_err(|error| error.to_string())?;
+        let Some(clip) = store.clips.iter().find(|clip| clip.id == id && clip.kind == "image") else {
+            return Ok(None);
+        };
+        clip.content_path.clone()
+    };
+
+    let Some(content_path) = content_path else {
+        return Ok(None);
+    };
+
+    let bytes = generate_preview_png_bytes(&state, &content_path)?;
+    Ok(Some(ClipImagePreview {
+        bytes,
+        mime_type: "image/png".to_string(),
+    }))
 }
 
 #[tauri::command]
@@ -737,11 +762,7 @@ pub fn copy_clip(
         return Ok(false);
     };
 
-    let text = if clip.kind == "file" {
-        clip.file_paths.join("\n")
-    } else {
-        clip.content_text.clone()
-    };
+    let text = clip_copy_text(clip);
     let key = suppression_key(&clip.kind, &text, &clip.file_paths);
     insert_suppression_key(&state, key)?;
 
@@ -788,9 +809,10 @@ pub fn clear_current_clips(
         return Ok(false);
     }
 
+    let id_set = ids.into_iter().collect::<HashSet<_>>();
     let mut store = state.inner.lock().map_err(|error| error.to_string())?;
     let original_len = store.clips.len();
-    store.clips.retain(|clip| !ids.contains(&clip.id));
+    store.clips.retain(|clip| !id_set.contains(&clip.id));
     let changed = store.clips.len() != original_len;
     if changed {
         store.data_version += 1;

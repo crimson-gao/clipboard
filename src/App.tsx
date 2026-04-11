@@ -23,6 +23,21 @@ type TabSnapshot = {
   lastLoadedVersion: number;
 };
 
+const EMPTY_TAB_SNAPSHOT: TabSnapshot = {
+  items: [],
+  offset: 0,
+  hasMore: false,
+  selectedClipId: null,
+  expandedClipIds: [],
+  lastLoadedVersion: 0,
+};
+
+const imagePreviewUrlCache = new Map<string, string>();
+
+function buildTabStateKey(query: string, filter: ClipFilter): string {
+  return `${query}::${filter}`;
+}
+
 function formatUpdatedAt(value: string): string {
   const date = new Date(value);
   const diff = Date.now() - date.getTime();
@@ -52,13 +67,13 @@ function summarizeText(text: string): string {
     .join('\n');
 }
 
-function toLocalFileUrl(filePath: string): string {
-  return encodeURI(`file://${filePath}`);
-}
-
 function getFileName(filePath: string): string {
   const parts = filePath.split('/');
   return parts[parts.length - 1] || filePath;
+}
+
+function buildImagePreviewCacheKey(clip: ClipItem): string {
+  return `${clip.id}:${clip.updatedAt}`;
 }
 
 function getClipSummary(clip: ClipItem): string {
@@ -90,6 +105,91 @@ function getClipMeta(clip: ClipItem): string {
   return `${clip.contentText.length} 字符`;
 }
 
+function ClipImagePreview({ clip }: { clip: ClipItem }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [shouldLoad, setShouldLoad] = useState(() =>
+    imagePreviewUrlCache.has(buildImagePreviewCacheKey(clip)),
+  );
+  const [imageUrl, setImageUrl] = useState<string | null>(() =>
+    imagePreviewUrlCache.get(buildImagePreviewCacheKey(clip)) ?? null,
+  );
+
+  useEffect(() => {
+    if (imagePreviewUrlCache.has(buildImagePreviewCacheKey(clip))) {
+      setShouldLoad(true);
+      return;
+    }
+
+    const node = containerRef.current;
+    if (!node) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) {
+          return;
+        }
+
+        setShouldLoad(true);
+        observer.disconnect();
+      },
+      {
+        root: document.querySelector('.history-scroll'),
+        rootMargin: '240px 0px',
+        threshold: 0.01,
+      },
+    );
+
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, [clip.id, clip.updatedAt]);
+
+  useEffect(() => {
+    if (!shouldLoad) {
+      return;
+    }
+
+    const cacheKey = buildImagePreviewCacheKey(clip);
+    const cached = imagePreviewUrlCache.get(cacheKey);
+    if (cached) {
+      setImageUrl(cached);
+      return;
+    }
+
+    let disposed = false;
+    void clipboardApi.getClipImagePreview(clip.id).then((payload) => {
+      if (!payload || disposed) {
+        return;
+      }
+
+      const nextUrl = URL.createObjectURL(
+        new Blob([new Uint8Array(payload.bytes)], { type: payload.mimeType }),
+      );
+      imagePreviewUrlCache.set(cacheKey, nextUrl);
+      if (!disposed) {
+        setImageUrl(nextUrl);
+      }
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [clip.id, clip.updatedAt, shouldLoad]);
+
+  if (!imageUrl) {
+    return <div ref={containerRef} className="image-preview image-preview-placeholder" aria-hidden="true" />;
+  }
+
+  return (
+    <div ref={containerRef} className="image-preview">
+      <img src={imageUrl} alt="" draggable={false} loading="lazy" />
+    </div>
+  );
+}
+
 function App() {
   const queryRef = useRef('');
   const filterRef = useRef<ClipFilter>('all');
@@ -118,20 +218,10 @@ function App() {
 
   const filter: ClipFilter =
     activeCategory === 'favorite' ? 'favorite' : activeCategory === 'all' ? 'all' : activeCategory;
-  const tabStateKey = `${query}::${filter}`;
+  const tabStateKey = buildTabStateKey(query, filter);
 
-  const writeTabSnapshot = (
-    key: string,
-    snapshot: Partial<TabSnapshot>,
-  ) => {
-    const current = tabStateRef.current[key] ?? {
-      items: [],
-      offset: 0,
-      hasMore: false,
-      selectedClipId: null,
-      expandedClipIds: [],
-      lastLoadedVersion: 0,
-    };
+  const writeTabSnapshot = (key: string, snapshot: Partial<TabSnapshot>) => {
+    const current = tabStateRef.current[key] ?? EMPTY_TAB_SNAPSHOT;
     tabStateRef.current[key] = { ...current, ...snapshot };
   };
 
@@ -142,17 +232,9 @@ function App() {
     append = false,
     pageSize = PAGE_SIZE,
   ) => {
-    const nextKey = `${nextQuery}::${nextFilter}`;
     const page = await clipboardApi.listClipsPage(nextQuery, nextFilter, nextOffset, pageSize);
     setClips((current) => {
-      const nextItems = append ? [...current, ...page.items] : page.items;
-      writeTabSnapshot(nextKey, {
-        items: nextItems,
-        offset: nextOffset + page.items.length,
-        hasMore: page.hasMore,
-        lastLoadedVersion: counts.dataVersion,
-      });
-      return nextItems;
+      return append ? [...current, ...page.items] : page.items;
     });
     setHasMore(page.hasMore);
     setOffset(nextOffset + page.items.length);
@@ -163,6 +245,15 @@ function App() {
   const refreshCounts = async () => {
     const nextCounts = await clipboardApi.getClipCounts();
     setCounts(nextCounts);
+  };
+
+  const runWithBusyId = async (id: number, action: () => Promise<unknown>) => {
+    setBusyId(id);
+    try {
+      await action();
+    } finally {
+      setBusyId(null);
+    }
   };
 
   useEffect(() => {
@@ -336,21 +427,15 @@ function App() {
   };
 
   const handleToggleFavorite = async (id: number) => {
-    setBusyId(id);
-    await clipboardApi.toggleFavorite(id);
-    setBusyId(null);
+    await runWithBusyId(id, () => clipboardApi.toggleFavorite(id));
   };
 
   const handleCopy = async (id: number) => {
-    setBusyId(id);
-    await clipboardApi.copyClip(id);
-    setBusyId(null);
+    await runWithBusyId(id, () => clipboardApi.copyClip(id));
   };
 
   const handlePasteAndHide = async (id: number) => {
-    setBusyId(id);
-    await clipboardApi.pasteClipAndHide(id);
-    setBusyId(null);
+    await runWithBusyId(id, () => clipboardApi.pasteClipAndHide(id));
   };
 
   const handleClearCurrent = async () => {
@@ -358,9 +443,7 @@ function App() {
       return;
     }
 
-    setBusyId(-1);
-    await clipboardApi.clearCurrentClips(clips.map((clip) => clip.id));
-    setBusyId(null);
+    await runWithBusyId(-1, () => clipboardApi.clearCurrentClips(clips.map((clip) => clip.id)));
   };
 
   const handleTogglePin = async () => {
@@ -478,7 +561,7 @@ function App() {
                 const preloadIndex = Math.max(clips.length - 5, 0);
                 const rowRef = index === preloadIndex ? preloadRef : undefined;
 
-                if (clip.type === 'image' && clip.contentPath) {
+                if (clip.type === 'image') {
                   return (
                     <article
                       key={clip.id}
@@ -493,9 +576,7 @@ function App() {
                     >
                       <div className="image-time">{formatUpdatedAt(clip.updatedAt)}</div>
                       <div className="image-card">
-                        <div className="image-preview">
-                          <img src={clip.previewDataUrl ?? toLocalFileUrl(clip.contentPath)} alt="" draggable={false} />
-                        </div>
+                        <ClipImagePreview clip={clip} />
                         <div className="image-meta">
                           <span>{meta}</span>
                           <div className="image-meta-right">

@@ -1,16 +1,17 @@
 :root {
   color-scheme: light;
   font-family:
-    "SF Pro Display",
-    "PingFang SC",
-    "Hiragino Sans GB",
-    "Microsoft YaHei",
+    'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
     sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #343434;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.96), rgba(248, 248, 250, 0.92) 30%, rgba(244, 244, 246, 0.94) 100%);
+  background: radial-gradient(
+    circle at top left,
+    rgba(255, 255, 255, 0.96),
+    rgba(248, 248, 250, 0.92) 30%,
+    rgba(244, 244, 246, 0.94) 100%
+  );
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -109,8 +110,12 @@ svg {
   min-height: 550px;
   padding: 10px 0 0;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 248, 249, 0.8) 42%, rgba(245, 245, 247, 0.9) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(248, 248, 249, 0.8) 42%,
+    rgba(245, 245, 247, 0.9) 100%
+  );
 }
 
 .top-chrome {
@@ -167,7 +172,11 @@ input {
   padding: 0 14px;
   color: #a9a9af;
   border-radius: 12px;
-  background: linear-gradient(90deg, rgba(240, 240, 242, 0.94), rgba(234, 234, 236, 0.9));
+  background: linear-gradient(
+    90deg,
+    rgba(240, 240, 242, 0.94),
+    rgba(234, 234, 236, 0.9)
+  );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
@@ -327,8 +336,11 @@ input {
   width: min(620px, calc(100vw - 48px));
   padding: 24px;
   border-radius: 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 249, 253, 0.96));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.97),
+    rgba(248, 249, 253, 0.96)
+  );
   box-shadow:
     0 24px 60px rgba(97, 108, 170, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -651,7 +663,11 @@ input {
   padding: 8px 10px 6px;
   border: 1px solid rgba(98, 108, 255, 0.18);
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 252, 253, 0.95));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(252, 252, 253, 0.95)
+  );
   contain: layout paint;
 }
 
@@ -670,8 +686,11 @@ input {
 
 .image-preview-placeholder {
   border-radius: 4px;
-  background:
-    linear-gradient(180deg, rgba(241, 243, 249, 0.92), rgba(235, 238, 245, 0.92));
+  background: linear-gradient(
+    180deg,
+    rgba(241, 243, 249, 0.92),
+    rgba(235, 238, 245, 0.92)
+  );
 }
 
 .image-preview img {
@@ -763,7 +782,11 @@ input {
 }
 
 .entry-row.is-selected {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 251, 255, 0.96));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(250, 251, 255, 0.96)
+  );
   box-shadow: inset 0 0 0 2px var(--line-strong);
 }
 

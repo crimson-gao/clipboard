@@ -13,7 +13,13 @@ type Category = {
   icon: (active: boolean) => JSX.Element;
 };
 
-const CATEGORY_ORDER: CategoryKey[] = ['all', 'text', 'image', 'file', 'favorite'];
+const CATEGORY_ORDER: CategoryKey[] = [
+  'all',
+  'text',
+  'image',
+  'file',
+  'favorite',
+];
 
 const PAGE_SIZE = 30;
 
@@ -114,7 +120,9 @@ function getClipMeta(clip: ClipItem): string {
   }
 
   if (clip.type === 'file') {
-    return clip.filePaths.length > 1 ? `${clip.filePaths.length} 个文件` : '文件';
+    return clip.filePaths.length > 1
+      ? `${clip.filePaths.length} 个文件`
+      : '文件';
   }
 
   return `${clip.contentText.length} 字符`;
@@ -128,7 +136,10 @@ function buildSettingsDraft(windowState: WindowState): SettingsDraft {
   };
 }
 
-function hasSettingsDraftChanges(windowState: WindowState, draft: SettingsDraft): boolean {
+function hasSettingsDraftChanges(
+  windowState: WindowState,
+  draft: SettingsDraft,
+): boolean {
   return (
     draft.shortcut.trim() !== windowState.shortcut.trim() ||
     draft.shortcutEnabled !== windowState.shortcutEnabled ||
@@ -141,8 +152,8 @@ function ClipImagePreview({ clip }: { clip: ClipItem }) {
   const [shouldLoad, setShouldLoad] = useState(() =>
     imagePreviewUrlCache.has(buildImagePreviewCacheKey(clip)),
   );
-  const [imageUrl, setImageUrl] = useState<string | null>(() =>
-    imagePreviewUrlCache.get(buildImagePreviewCacheKey(clip)) ?? null,
+  const [imageUrl, setImageUrl] = useState<string | null>(
+    () => imagePreviewUrlCache.get(buildImagePreviewCacheKey(clip)) ?? null,
   );
 
   useEffect(() => {
@@ -211,7 +222,13 @@ function ClipImagePreview({ clip }: { clip: ClipItem }) {
   }, [clip.id, clip.updatedAt, shouldLoad]);
 
   if (!imageUrl) {
-    return <div ref={containerRef} className="image-preview image-preview-placeholder" aria-hidden="true" />;
+    return (
+      <div
+        ref={containerRef}
+        className="image-preview image-preview-placeholder"
+        aria-hidden="true"
+      />
+    );
   }
 
   return (
@@ -257,7 +274,11 @@ function App() {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   const filter: ClipFilter =
-    activeCategory === 'favorite' ? 'favorite' : activeCategory === 'all' ? 'all' : activeCategory;
+    activeCategory === 'favorite'
+      ? 'favorite'
+      : activeCategory === 'all'
+        ? 'all'
+        : activeCategory;
   const tabStateKey = buildTabStateKey(query, filter);
 
   const writeTabSnapshot = (key: string, snapshot: Partial<TabSnapshot>) => {
@@ -272,7 +293,12 @@ function App() {
     append = false,
     pageSize = PAGE_SIZE,
   ) => {
-    const page = await clipboardApi.listClipsPage(nextQuery, nextFilter, nextOffset, pageSize);
+    const page = await clipboardApi.listClipsPage(
+      nextQuery,
+      nextFilter,
+      nextOffset,
+      pageSize,
+    );
     setClips((current) => {
       return append ? [...current, ...page.items] : page.items;
     });
@@ -376,7 +402,13 @@ function App() {
         setLoading(true);
         setSelectedClipId(cached.selectedClipId);
         setExpandedClipIds(cached.expandedClipIds);
-        void loadClips(query, filter, 0, false, Math.max(cached.offset, PAGE_SIZE));
+        void loadClips(
+          query,
+          filter,
+          0,
+          false,
+          Math.max(cached.offset, PAGE_SIZE),
+        );
         return;
       }
       setClips(cached.items);
@@ -413,7 +445,15 @@ function App() {
       expandedClipIds,
       lastLoadedVersion: counts.dataVersion,
     });
-  }, [clips, counts.dataVersion, expandedClipIds, hasMore, offset, selectedClipId, tabStateKey]);
+  }, [
+    clips,
+    counts.dataVersion,
+    expandedClipIds,
+    hasMore,
+    offset,
+    selectedClipId,
+    tabStateKey,
+  ]);
 
   const categories: Category[] = [
     {
@@ -421,7 +461,17 @@ function App() {
       label: '全部',
       icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          {active ? <rect x="6" y="5" width="12" height="15" rx="2" fill="currentColor" opacity="0.18" /> : null}
+          {active ? (
+            <rect
+              x="6"
+              y="5"
+              width="12"
+              height="15"
+              rx="2"
+              fill="currentColor"
+              opacity="0.18"
+            />
+          ) : null}
           <rect x="6" y="5" width="12" height="15" rx="2" />
           <path d="M9 9h6M9 13h6M15 3v4M9 3v4" />
         </svg>
@@ -433,7 +483,11 @@ function App() {
       count: counts.text,
       icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          {active ? <path d="M5 6h14v2H13v9h-2V8H5z" fill="currentColor" /> : <path d="M6 7h12M12 7v10M9 17h6" />}
+          {active ? (
+            <path d="M5 6h14v2H13v9h-2V8H5z" fill="currentColor" />
+          ) : (
+            <path d="M6 7h12M12 7v10M9 17h6" />
+          )}
         </svg>
       ),
     },
@@ -443,9 +497,24 @@ function App() {
       count: counts.image,
       icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          {active ? <rect x="4.5" y="5.5" width="15" height="13" rx="2" fill="currentColor" opacity="0.18" /> : null}
+          {active ? (
+            <rect
+              x="4.5"
+              y="5.5"
+              width="15"
+              height="13"
+              rx="2"
+              fill="currentColor"
+              opacity="0.18"
+            />
+          ) : null}
           <rect x="4.5" y="5.5" width="15" height="13" rx="2" />
-          <circle cx="10" cy="10" r="1.25" fill={active ? 'currentColor' : 'none'} />
+          <circle
+            cx="10"
+            cy="10"
+            r="1.25"
+            fill={active ? 'currentColor' : 'none'}
+          />
           <path d="M7.5 16l3.2-3.3 2.7 2.6 2-2.1 2.3 2.8" />
         </svg>
       ),
@@ -456,7 +525,13 @@ function App() {
       count: counts.file,
       icon: (active) => (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          {active ? <path d="M8 4.5h6l3 3V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" fill="currentColor" opacity="0.18" /> : null}
+          {active ? (
+            <path
+              d="M8 4.5h6l3 3V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z"
+              fill="currentColor"
+              opacity="0.18"
+            />
+          ) : null}
           <path d="M8 4.5h6l3 3V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
           <path d="M14 4.5v4h4" />
         </svg>
@@ -524,11 +599,17 @@ function App() {
   };
 
   const handleClearCurrent = async () => {
-    if (activeCategory === 'favorite' || clips.length === 0 || busyId !== null) {
+    if (
+      activeCategory === 'favorite' ||
+      clips.length === 0 ||
+      busyId !== null
+    ) {
       return;
     }
 
-    await runWithBusyId(-1, () => clipboardApi.clearCurrentClips(clips.map((clip) => clip.id)));
+    await runWithBusyId(-1, () =>
+      clipboardApi.clearCurrentClips(clips.map((clip) => clip.id)),
+    );
   };
 
   const handleTogglePin = async () => {
@@ -564,22 +645,22 @@ function App() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [
-    settingsOpen,
-    settingsDraft,
-    windowState,
-  ]);
+  }, [settingsOpen, settingsDraft, windowState]);
 
   const selectedFavoriteLabel = selectedClip?.isFavorite ? '取消收藏' : '收藏';
-  const clearDisabled = activeCategory === 'favorite' || clips.length === 0 || busyId !== null;
+  const clearDisabled =
+    activeCategory === 'favorite' || clips.length === 0 || busyId !== null;
 
   const toggleExpanded = (id: number) => {
     setExpandedClipIds((current) =>
-      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
     );
   };
 
-  const setRowRef = (id: number, preloadRefCallback?: (node: HTMLElement | null) => void) =>
+  const setRowRef =
+    (id: number, preloadRefCallback?: (node: HTMLElement | null) => void) =>
     (node: HTMLElement | null) => {
       rowRefs.current[id] = node;
       preloadRefCallback?.(node);
@@ -592,7 +673,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const selectedNode = selectedClipId ? rowRefs.current[selectedClipId] : null;
+    const selectedNode = selectedClipId
+      ? rowRefs.current[selectedClipId]
+      : null;
     selectedNode?.scrollIntoView({
       block: 'nearest',
       inline: 'nearest',
@@ -620,7 +703,9 @@ function App() {
         }
 
         const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (currentIndex + delta + CATEGORY_ORDER.length) % CATEGORY_ORDER.length;
+        const nextIndex =
+          (currentIndex + delta + CATEGORY_ORDER.length) %
+          CATEGORY_ORDER.length;
         setActiveCategory(CATEGORY_ORDER[nextIndex] ?? activeCategory);
         return;
       }
@@ -631,7 +716,9 @@ function App() {
 
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
-        const currentIndex = clips.findIndex((clip) => clip.id === selectedClip.id);
+        const currentIndex = clips.findIndex(
+          (clip) => clip.id === selectedClip.id,
+        );
         if (currentIndex === -1) {
           return;
         }
@@ -735,7 +822,9 @@ function App() {
                 setActiveCategory(item.key);
               }}
             >
-              <span className="category-icon">{item.icon(activeCategory === item.key)}</span>
+              <span className="category-icon">
+                {item.icon(activeCategory === item.key)}
+              </span>
               <span>
                 {item.label}
                 {item.count && item.count > 0 ? ` (${item.count})` : ''}
@@ -778,14 +867,20 @@ function App() {
                         void handlePasteAndHide(clip.id);
                       }}
                     >
-                      <div className="image-time">{formatUpdatedAt(clip.updatedAt)}</div>
+                      <div className="image-time">
+                        {formatUpdatedAt(clip.updatedAt)}
+                      </div>
                       <div className="image-card">
                         <ClipImagePreview clip={clip} />
                         <div className="image-meta">
                           <span>{meta}</span>
                           <div className="image-meta-right">
                             {clip.isFavorite ? (
-                              <span className="entry-star entry-star-inline" aria-label="已收藏" {...bindTooltip('已收藏')}>
+                              <span
+                                className="entry-star entry-star-inline"
+                                aria-label="已收藏"
+                                {...bindTooltip('已收藏')}
+                              >
                                 <svg viewBox="0 0 24 24" aria-hidden="true">
                                   <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
                                 </svg>
@@ -825,12 +920,21 @@ function App() {
                           </svg>
                         </div>
                         <div className="file-copy">
-                          <p className="entry-title">{getFileName(primaryFile)}</p>
+                          <p className="entry-title">
+                            {getFileName(primaryFile)}
+                          </p>
                           <div className="file-detail-row">
-                            <p className="entry-time">{formatUpdatedAt(clip.updatedAt)}</p>
+                            <p className="entry-time">
+                              {formatUpdatedAt(clip.updatedAt)}
+                            </p>
                           </div>
                           <div className="file-path-row">
-                            <span className="file-path-inline" title={primaryFile}>{primaryFile}</span>
+                            <span
+                              className="file-path-inline"
+                              title={primaryFile}
+                            >
+                              {primaryFile}
+                            </span>
                             <button
                               type="button"
                               className="file-copy-button"
@@ -868,7 +972,11 @@ function App() {
                         </button>
                         <div className="text-meta">
                           {clip.isFavorite ? (
-                            <span className="entry-star entry-star-inline" aria-label="已收藏" {...bindTooltip('已收藏')}>
+                            <span
+                              className="entry-star entry-star-inline"
+                              aria-label="已收藏"
+                              {...bindTooltip('已收藏')}
+                            >
                               <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
                               </svg>
@@ -899,11 +1007,15 @@ function App() {
                     }}
                   >
                     <div className="text-content">
-                      <p className={`entry-title entry-title-text${expandedClipIds.includes(clip.id) ? ' is-expanded' : ''}`}>
+                      <p
+                        className={`entry-title entry-title-text${expandedClipIds.includes(clip.id) ? ' is-expanded' : ''}`}
+                      >
                         {summary}
                       </p>
                       <div className="text-footer">
-                        <p className="entry-time">{formatUpdatedAt(clip.updatedAt)}</p>
+                        <p className="entry-time">
+                          {formatUpdatedAt(clip.updatedAt)}
+                        </p>
                         {clip.contentText.length > 180 ? (
                           <button
                             type="button"
@@ -913,17 +1025,31 @@ function App() {
                               toggleExpanded(clip.id);
                             }}
                           >
-                            <span className="entry-toggle-icon" aria-hidden="true">
+                            <span
+                              className="entry-toggle-icon"
+                              aria-hidden="true"
+                            >
                               {expandedClipIds.includes(clip.id) ? '⌃' : '⌄'}
                             </span>
-                            <span>{expandedClipIds.includes(clip.id) ? '收缩' : '展开'}</span>
+                            <span>
+                              {expandedClipIds.includes(clip.id)
+                                ? '收缩'
+                                : '展开'}
+                            </span>
                           </button>
                         ) : (
-                          <span className="entry-toggle entry-toggle-placeholder" aria-hidden="true" />
+                          <span
+                            className="entry-toggle entry-toggle-placeholder"
+                            aria-hidden="true"
+                          />
                         )}
                         <div className="text-meta">
                           {clip.isFavorite ? (
-                            <span className="entry-star entry-star-inline" aria-label="已收藏" {...bindTooltip('已收藏')}>
+                            <span
+                              className="entry-star entry-star-inline"
+                              aria-label="已收藏"
+                              {...bindTooltip('已收藏')}
+                            >
                               <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
                               </svg>
@@ -937,7 +1063,9 @@ function App() {
                   </article>
                 );
               })}
-              {loadingMore ? <div className="list-loading-more">加载更多中...</div> : null}
+              {loadingMore ? (
+                <div className="list-loading-more">加载更多中...</div>
+              ) : null}
             </div>
           )}
         </section>
@@ -991,7 +1119,9 @@ function App() {
                 }
               }}
             >
-              <span className={`fab fab-favorite${selectedClip?.isFavorite ? ' is-active' : ''}`}>
+              <span
+                className={`fab fab-favorite${selectedClip?.isFavorite ? ' is-active' : ''}`}
+              >
                 <svg viewBox="0 0 24 24">
                   <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
                 </svg>
@@ -1022,7 +1152,9 @@ function App() {
           </div>
 
           <div className="utility-rail" aria-hidden="true">
-            <div className="utility-indicator">{loading ? '同步中' : `${clips.length} 条`}</div>
+            <div className="utility-indicator">
+              {loading ? '同步中' : `${clips.length} 条`}
+            </div>
           </div>
         </aside>
       </main>
@@ -1056,7 +1188,9 @@ function App() {
             <div className="settings-modal-header">
               <div>
                 <p className="settings-modal-title">设置</p>
-                <span className="settings-modal-subtitle">修改后会自动保存</span>
+                <span className="settings-modal-subtitle">
+                  修改后会自动保存
+                </span>
               </div>
               <button
                 type="button"
@@ -1078,7 +1212,9 @@ function App() {
                 <div className="settings-card-header">
                   <div>
                     <p className="settings-label">全局快捷键</p>
-                    <span className="settings-hint">默认使用 Cmd + Shift + S 呼出面板</span>
+                    <span className="settings-hint">
+                      默认使用 Cmd + Shift + S 呼出面板
+                    </span>
                   </div>
                   <label className="settings-switch">
                     <input
@@ -1091,7 +1227,9 @@ function App() {
                         }));
                       }}
                     />
-                    <span>{settingsDraft.shortcutEnabled ? '已启用' : '已禁用'}</span>
+                    <span>
+                      {settingsDraft.shortcutEnabled ? '已启用' : '已禁用'}
+                    </span>
                   </label>
                 </div>
 
@@ -1116,7 +1254,9 @@ function App() {
                 <div className="settings-card-header">
                   <div>
                     <p className="settings-label">菜单栏图标</p>
-                    <span className="settings-hint">点击 menu bar 图标也可以呼出面板</span>
+                    <span className="settings-hint">
+                      点击 menu bar 图标也可以呼出面板
+                    </span>
                   </div>
                   <label className="settings-switch">
                     <input
@@ -1129,7 +1269,9 @@ function App() {
                         }));
                       }}
                     />
-                    <span>{settingsDraft.showTrayIcon ? '显示中' : '已隐藏'}</span>
+                    <span>
+                      {settingsDraft.showTrayIcon ? '显示中' : '已隐藏'}
+                    </span>
                   </label>
                 </div>
               </section>

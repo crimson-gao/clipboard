@@ -14,6 +14,16 @@ import {
   type TabSnapshot,
 } from '../features/clips/clip-utils';
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return Boolean(
+    element &&
+      (element.tagName === 'INPUT' ||
+        element.tagName === 'TEXTAREA' ||
+        element.isContentEditable),
+  );
+}
+
 export function useClipboardApp() {
   const queryRef = useRef('');
   const filterRef = useRef<ClipFilter>('all');
@@ -47,12 +57,7 @@ export function useClipboardApp() {
     shortcutEnabled: true,
     showTrayIcon: true,
   });
-  const filter: ClipFilter =
-    activeCategory === 'favorite'
-      ? 'favorite'
-      : activeCategory === 'all'
-        ? 'all'
-        : activeCategory;
+  const filter: ClipFilter = activeCategory;
   const tabStateKey = buildTabStateKey(query, filter);
   const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? null;
 
@@ -263,6 +268,17 @@ export function useClipboardApp() {
     setWindowState(next);
   };
 
+  const saveSettingsDraft = async () => {
+    await runWithBusyId(-2, async () => {
+      const next = await clipboardApi.updateWindowSettings(
+        settingsDraft.shortcut.trim(),
+        settingsDraft.shortcutEnabled,
+        settingsDraft.showTrayIcon,
+      );
+      setWindowState(next);
+    });
+  };
+
   useEffect(() => {
     if (!settingsOpen || !windowState) {
       return;
@@ -273,16 +289,7 @@ export function useClipboardApp() {
     }
 
     const timer = window.setTimeout(() => {
-      void (async () => {
-        setBusyId(-2);
-        const next = await clipboardApi.updateWindowSettings(
-          settingsDraft.shortcut.trim(),
-          settingsDraft.shortcutEnabled,
-          settingsDraft.showTrayIcon,
-        );
-        setWindowState(next);
-        setBusyId(null);
-      })();
+      void saveSettingsDraft();
     }, 220);
 
     return () => {
@@ -326,14 +333,7 @@ export function useClipboardApp() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        settingsOpen ||
-        (target &&
-          (target.tagName === 'INPUT' ||
-            target.tagName === 'TEXTAREA' ||
-            target.isContentEditable))
-      ) {
+      if (settingsOpen || isEditableTarget(event.target)) {
         return;
       }
 
@@ -358,9 +358,7 @@ export function useClipboardApp() {
 
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
-        const currentIndex = clips.findIndex(
-          (clip) => clip.id === selectedClip.id,
-        );
+        const currentIndex = clips.findIndex((clip) => clip.id === selectedClip.id);
         if (currentIndex === -1) {
           return;
         }

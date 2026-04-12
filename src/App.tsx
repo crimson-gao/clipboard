@@ -155,6 +155,7 @@ function App() {
   const selectedFavoriteLabel = selectedClip?.isFavorite ? '取消收藏' : '收藏';
   const clearDisabled =
     activeCategory === 'favorite' || clips.length === 0 || busyId !== null;
+  const selectedClipBusy = !selectedClip || busyId === selectedClip.id;
 
   const showTooltip = (text: string, x: number, y: number) => {
     setTooltip({ text, x, y });
@@ -182,6 +183,14 @@ function App() {
       hideTooltip();
     },
   });
+
+  const runForSelectedClip = (action: (id: number) => void) => {
+    if (!selectedClip) {
+      return;
+    }
+
+    action(selectedClip.id);
+  };
 
   return (
     <div className="app-shell">
@@ -217,7 +226,7 @@ function App() {
                 className={`ghost-icon${settingsOpen ? ' is-active' : ''}`}
                 aria-label="设置"
                 onClick={() => {
-                  setSettingsOpen(!settingsOpen);
+                  setSettingsOpen((current) => !current);
                 }}
               >
                 <svg viewBox="0 0 24 24">
@@ -297,11 +306,11 @@ function App() {
             <button
               type="button"
               className="tool-action"
-              disabled={!selectedClip || busyId === selectedClip.id}
+              disabled={selectedClipBusy}
               onClick={() => {
-                if (selectedClip) {
-                  void handleCopy(selectedClip.id);
-                }
+                runForSelectedClip((id) => {
+                  void handleCopy(id);
+                });
               }}
             >
               <span className="fab fab-primary">
@@ -316,11 +325,11 @@ function App() {
             <button
               type="button"
               className="tool-action"
-              disabled={!selectedClip || busyId === selectedClip.id}
+              disabled={selectedClipBusy}
               onClick={() => {
-                if (selectedClip) {
-                  void handlePasteAndHide(selectedClip.id);
-                }
+                runForSelectedClip((id) => {
+                  void handlePasteAndHide(id);
+                });
               }}
             >
               <span className="fab fab-muted">
@@ -334,11 +343,11 @@ function App() {
             <button
               type="button"
               className="tool-action"
-              disabled={!selectedClip || busyId === selectedClip.id}
+              disabled={selectedClipBusy}
               onClick={() => {
-                if (selectedClip) {
-                  void handleToggleFavorite(selectedClip.id);
-                }
+                runForSelectedClip((id) => {
+                  void handleToggleFavorite(id);
+                });
               }}
             >
               <span

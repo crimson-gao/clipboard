@@ -15,7 +15,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use crate::{
-    events::{OPEN_SETTINGS_EVENT, TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID},
+    events::{OPEN_SETTINGS_EVENT, TRAY_ABOUT_MENU_ID, TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID},
     models::{ClipItem, WindowState},
     store::{clip_copy_text, current_window_state, ClipboardState, DEFAULT_SHORTCUT},
     window::{apply_main_window_overlay, toggle_main_window},
@@ -43,6 +43,8 @@ pub fn ensure_tray_icon(app: &AppHandle, visible: bool) -> Result<(), String> {
     };
     let app_handle = app.clone();
     let menu = MenuBuilder::new(app)
+        .text(TRAY_ABOUT_MENU_ID, "关于 Clipboard")
+        .separator()
         .text(TRAY_SETTINGS_MENU_ID, "设置")
         .separator()
         .text(TRAY_QUIT_MENU_ID, "退出")

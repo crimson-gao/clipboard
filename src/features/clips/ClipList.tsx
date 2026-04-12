@@ -144,8 +144,9 @@ export function ClipList({
                     <p className="entry-time">
                       {formatUpdatedAt(clip.updatedAt)}
                     </p>
-                  </div>
-                  <div className="file-path-row">
+                    <span className="file-detail-separator" aria-hidden="true">
+                      ·
+                    </span>
                     <span className="file-path-inline" title={primaryFile}>
                       {primaryFile}
                     </span>

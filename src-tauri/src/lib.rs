@@ -11,12 +11,12 @@ use commands::{
     list_clips_page, paste_clip_and_hide, show_clip_in_finder, toggle_favorite, toggle_pin_window,
     update_window_settings,
 };
-use events::{TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID};
+use events::{TRAY_ABOUT_MENU_ID, TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID};
 use shell::{configure_shell, emit_open_settings};
 use store::ClipboardState;
 use tauri::{ActivationPolicy, Manager, WindowEvent};
 use window::{
-    close_main_window, configure_main_window_overlay, open_main_window,
+    close_main_window, configure_main_window_overlay, open_about_window, open_main_window,
     should_auto_hide_main_window,
 };
 
@@ -27,6 +27,9 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .on_menu_event(|app, event| match event.id().0.as_str() {
+            TRAY_ABOUT_MENU_ID => {
+                let _ = open_about_window(app);
+            }
             TRAY_SETTINGS_MENU_ID => {
                 emit_open_settings(app);
                 open_main_window(app, true);

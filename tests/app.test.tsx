@@ -173,8 +173,12 @@ describe('App', () => {
       'CommandOrControl+Shift+S',
     );
 
-    await user.clear(shortcutInput);
-    await user.type(shortcutInput, 'CommandOrControl+Shift+K');
+    await user.click(shortcutInput);
+    fireEvent.keyDown(shortcutInput, {
+      key: 'k',
+      metaKey: true,
+      shiftKey: true,
+    });
 
     expect(mockUpdateWindowSettings).not.toHaveBeenCalled();
 

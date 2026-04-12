@@ -71,9 +71,11 @@ export function formatUpdatedAt(value: string): string {
 
 export function summarizeText(text: string): string {
   return text
+    .trim()
     .split('\n')
-    .map((line) => line.replace(/[ \t]+/g, ' '))
-    .join('\n');
+    .map((line) => line.replace(/[ \t]+/g, ' ').trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 export function getFileName(filePath: string): string {

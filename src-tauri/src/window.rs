@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
@@ -156,4 +156,25 @@ pub fn toggle_main_window(app: &AppHandle, remember_target: bool) {
             open_main_window(app, remember_target);
         }
     }
+}
+
+pub fn open_about_window(app: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("about") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(app, "about", WebviewUrl::App("about.html".into()))
+        .title("About Clipboard")
+        .inner_size(620.0, 520.0)
+        .min_inner_size(560.0, 460.0)
+        .resizable(true)
+        .maximizable(false)
+        .visible(true)
+        .center()
+        .build()
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }

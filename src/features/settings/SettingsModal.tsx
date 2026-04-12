@@ -1,4 +1,5 @@
 import type { SettingsDraft } from '../clips/clip-utils';
+import { ShortcutRecorder } from './ShortcutRecorder';
 
 type TooltipProps = {
   onMouseEnter: React.MouseEventHandler<HTMLElement>;
@@ -75,15 +76,14 @@ export function SettingsModal({
             </div>
 
             <label className="settings-input">
-              <span>快捷键字符串</span>
-              <input
-                type="text"
+              <span>录制快捷键</span>
+              <ShortcutRecorder
                 value={draft.shortcut}
                 disabled={!draft.shortcutEnabled}
-                onChange={(event) => {
+                onChange={(shortcut) => {
                   onDraftChange((current) => ({
                     ...current,
-                    shortcut: event.target.value,
+                    shortcut,
                   }));
                 }}
                 placeholder="CommandOrControl+Shift+S"

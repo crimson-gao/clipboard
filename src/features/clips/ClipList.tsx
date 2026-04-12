@@ -85,7 +85,6 @@ export function ClipList({
         const preloadIndex = Math.max(clips.length - 5, 0);
         const rowRef = index === preloadIndex ? preloadRef : undefined;
         const commonProps = {
-          key: clip.id,
           ref: setRowRef(clip.id, rowRef),
           className: `entry-row${isSelected ? ' is-selected' : ''} ${
             clip.type === 'image'
@@ -108,7 +107,7 @@ export function ClipList({
 
         if (clip.type === 'image') {
           return (
-            <article {...commonProps}>
+            <article key={clip.id} {...commonProps}>
               <div className="image-time">
                 {formatUpdatedAt(clip.updatedAt)}
               </div>
@@ -131,7 +130,7 @@ export function ClipList({
         if (clip.type === 'file') {
           const primaryFile = clip.filePaths[0] ?? clip.contentText;
           return (
-            <article {...commonProps}>
+            <article key={clip.id} {...commonProps}>
               <div className="file-main">
                 <div className="file-icon">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -199,7 +198,7 @@ export function ClipList({
 
         const isExpanded = expandedClipIds.includes(clip.id);
         return (
-          <article {...commonProps}>
+          <article key={clip.id} {...commonProps}>
             <div className="text-content">
               <p
                 className={`entry-title entry-title-text${

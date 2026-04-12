@@ -226,6 +226,15 @@ pub fn toggle_pin_window(
     Ok(response)
 }
 
+fn resolve_shortcut(shortcut: &str) -> String {
+    let normalized = shortcut.trim();
+    if normalized.is_empty() {
+        DEFAULT_SHORTCUT.to_string()
+    } else {
+        normalized.to_string()
+    }
+}
+
 pub fn update_window_settings(
     app: &AppHandle,
     state: &ClipboardState,
@@ -233,7 +242,7 @@ pub fn update_window_settings(
     shortcut_enabled: bool,
     show_tray_icon: bool,
 ) -> Result<WindowState, String> {
-    let normalized_shortcut = shortcut.trim().to_string();
+    let normalized_shortcut = resolve_shortcut(&shortcut);
     if shortcut_enabled {
         normalized_shortcut
             .parse::<Shortcut>()
@@ -241,11 +250,7 @@ pub fn update_window_settings(
     }
 
     state.with_store_mut(|store| {
-        store.shortcut = Some(if normalized_shortcut.is_empty() {
-            DEFAULT_SHORTCUT.to_string()
-        } else {
-            normalized_shortcut.clone()
-        });
+        store.shortcut = Some(normalized_shortcut.clone());
         store.shortcut_enabled = shortcut_enabled;
         store.show_tray_icon = show_tray_icon;
         state.save(store).map_err(|error| error.to_string())?;
@@ -288,4 +293,24 @@ pub fn configure_shortcut(app: &AppHandle) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_shortcut;
+    use crate::store::DEFAULT_SHORTCUT;
+
+    #[test]
+    fn resolve_shortcut_falls_back_to_default_for_blank_input() {
+        assert_eq!(resolve_shortcut(""), DEFAULT_SHORTCUT);
+        assert_eq!(resolve_shortcut("   "), DEFAULT_SHORTCUT);
+    }
+
+    #[test]
+    fn resolve_shortcut_trims_non_empty_input() {
+        assert_eq!(
+            resolve_shortcut("  CommandOrControl+Shift+K  "),
+            "CommandOrControl+Shift+K"
+        );
+    }
 }

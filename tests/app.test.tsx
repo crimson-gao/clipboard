@@ -2,7 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import App from '../src/App';
-import type { ClipCounts, ClipItem, PaginatedClips, WindowState } from '../src/types';
+import type {
+  ClipCounts,
+  ClipItem,
+  PaginatedClips,
+  WindowState,
+} from '../src/types';
 
 const {
   mockListClipsPage,
@@ -14,21 +19,28 @@ const {
   mockUpdateWindowSettings,
   mockOpenSettingsWindow,
 } = vi.hoisted(() => ({
-  mockListClipsPage: vi.fn<
-    (query?: string, filter?: string, offset?: number, limit?: number) => Promise<PaginatedClips>
-  >(),
+  mockListClipsPage:
+    vi.fn<
+      (
+        query?: string,
+        filter?: string,
+        offset?: number,
+        limit?: number,
+      ) => Promise<PaginatedClips>
+    >(),
   mockGetClipCounts: vi.fn<() => Promise<ClipCounts>>(),
   mockGetWindowState: vi.fn<() => Promise<WindowState>>(),
   mockCopyClip: vi.fn<(id: number) => Promise<boolean>>(),
   mockPasteClipAndHide: vi.fn<(id: number) => Promise<boolean>>(),
   mockToggleFavorite: vi.fn<(id: number) => Promise<ClipItem | null>>(),
-  mockUpdateWindowSettings: vi.fn<
-    (
-      shortcut: string,
-      shortcutEnabled: boolean,
-      showTrayIcon: boolean,
-    ) => Promise<WindowState>
-  >(),
+  mockUpdateWindowSettings:
+    vi.fn<
+      (
+        shortcut: string,
+        shortcutEnabled: boolean,
+        showTrayIcon: boolean,
+      ) => Promise<WindowState>
+    >(),
   mockOpenSettingsWindow: vi.fn<() => Promise<void>>(),
 }));
 

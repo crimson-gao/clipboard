@@ -12,6 +12,19 @@ export function SettingsPanel({
   isSaving,
   onDraftChange,
 }: SettingsPanelProps) {
+  const updateDraft =
+    <K extends keyof SettingsDraft>(key: K) =>
+    (value: SettingsDraft[K]) => {
+      onDraftChange((current) => ({
+        ...current,
+        [key]: value,
+      }));
+    };
+
+  const updateShortcutEnabled = updateDraft('shortcutEnabled');
+  const updateShortcut = updateDraft('shortcut');
+  const updateShowTrayIcon = updateDraft('showTrayIcon');
+
   return (
     <section className="settings-window-panel" aria-label="设置">
       <div className="settings-modal-header">
@@ -35,10 +48,7 @@ export function SettingsPanel({
                 type="checkbox"
                 checked={draft.shortcutEnabled}
                 onChange={(event) => {
-                  onDraftChange((current) => ({
-                    ...current,
-                    shortcutEnabled: event.target.checked,
-                  }));
+                  updateShortcutEnabled(event.target.checked);
                 }}
               />
               <span>{draft.shortcutEnabled ? '已启用' : '已禁用'}</span>
@@ -50,12 +60,7 @@ export function SettingsPanel({
             <ShortcutRecorder
               value={draft.shortcut}
               disabled={!draft.shortcutEnabled}
-              onChange={(shortcut) => {
-                onDraftChange((current) => ({
-                  ...current,
-                  shortcut,
-                }));
-              }}
+              onChange={updateShortcut}
               placeholder="CommandOrControl+Shift+S"
             />
           </label>
@@ -74,10 +79,7 @@ export function SettingsPanel({
                 type="checkbox"
                 checked={draft.showTrayIcon}
                 onChange={(event) => {
-                  onDraftChange((current) => ({
-                    ...current,
-                    showTrayIcon: event.target.checked,
-                  }));
+                  updateShowTrayIcon(event.target.checked);
                 }}
               />
               <span>{draft.showTrayIcon ? '显示中' : '已隐藏'}</span>

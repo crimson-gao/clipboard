@@ -2,8 +2,8 @@ import type { FocusEvent, MouseEvent } from 'react';
 import { useState } from 'react';
 
 import { Tooltip } from './components/Tooltip';
+import { buildCategories } from './features/clips/categories';
 import { ClipList } from './features/clips/ClipList';
-import type { Category } from './features/clips/clip-utils';
 import { useClipboardApp } from './hooks/useClipboardApp';
 import { clipboardApi } from './lib/clipboard-api';
 
@@ -12,110 +12,6 @@ type TooltipState = {
   x: number;
   y: number;
 };
-
-function buildCategories(counts: {
-  text: number;
-  image: number;
-  file: number;
-  favorite: number;
-}): Category[] {
-  return [
-    {
-      key: 'all',
-      label: '全部',
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          {active ? (
-            <rect
-              x="6"
-              y="5"
-              width="12"
-              height="15"
-              rx="2"
-              fill="currentColor"
-              opacity="0.18"
-            />
-          ) : null}
-          <rect x="6" y="5" width="12" height="15" rx="2" />
-          <path d="M9 9h6M9 13h6M15 3v4M9 3v4" />
-        </svg>
-      ),
-    },
-    {
-      key: 'text',
-      label: '文本',
-      count: counts.text,
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          {active ? (
-            <path d="M5 6h14v2H13v9h-2V8H5z" fill="currentColor" />
-          ) : (
-            <path d="M6 7h12M12 7v10M9 17h6" />
-          )}
-        </svg>
-      ),
-    },
-    {
-      key: 'image',
-      label: '图像',
-      count: counts.image,
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          {active ? (
-            <rect
-              x="4.5"
-              y="5.5"
-              width="15"
-              height="13"
-              rx="2"
-              fill="currentColor"
-              opacity="0.18"
-            />
-          ) : null}
-          <rect x="4.5" y="5.5" width="15" height="13" rx="2" />
-          <circle
-            cx="10"
-            cy="10"
-            r="1.25"
-            fill={active ? 'currentColor' : 'none'}
-          />
-          <path d="M7.5 16l3.2-3.3 2.7 2.6 2-2.1 2.3 2.8" />
-        </svg>
-      ),
-    },
-    {
-      key: 'file',
-      label: '文件',
-      count: counts.file,
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          {active ? (
-            <path
-              d="M8 4.5h6l3 3V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z"
-              fill="currentColor"
-              opacity="0.18"
-            />
-          ) : null}
-          <path d="M8 4.5h6l3 3V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2Z" />
-          <path d="M14 4.5v4h4" />
-        </svg>
-      ),
-    },
-    {
-      key: 'favorite',
-      label: '收藏',
-      count: counts.favorite,
-      icon: (active) => (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z"
-            fill={active ? 'currentColor' : 'none'}
-          />
-        </svg>
-      ),
-    },
-  ];
-}
 
 function App() {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
@@ -151,17 +47,38 @@ function App() {
   const clearDisabled =
     activeCategory === 'favorite' || clips.length === 0 || busyId !== null;
   const selectedClipBusy = !selectedClip || busyId === selectedClip.id;
-  const runForSelectedClip = (action: (id: number) => void) => {
+  const copySelectedClip = () => {
     if (!selectedClip) {
       return;
     }
 
-    action(selectedClip.id);
+    void handleCopy(selectedClip.id);
   };
-  const runSelectedAsync = (action: (id: number) => Promise<unknown>) => {
-    runForSelectedClip((id) => {
-      void action(id);
-    });
+  const pasteSelectedClip = () => {
+    if (!selectedClip) {
+      return;
+    }
+
+    void handlePasteAndHide(selectedClip.id);
+  };
+  const toggleFavoriteForSelectedClip = () => {
+    if (!selectedClip) {
+      return;
+    }
+
+    void handleToggleFavorite(selectedClip.id);
+  };
+  const writePathToClipboard = (path: string) => {
+    void navigator.clipboard.writeText(path);
+  };
+  const openSettingsWindow = () => {
+    void clipboardApi.openSettingsWindow();
+  };
+  const togglePinnedWindow = () => {
+    void handleTogglePin();
+  };
+  const clearCurrentClips = () => {
+    void handleClearCurrent();
   };
 
   const showTooltip = (text: string, x: number, y: number) => {
@@ -224,9 +141,7 @@ function App() {
                 type="button"
                 className="ghost-icon"
                 aria-label="设置"
-                onClick={() => {
-                  void clipboardApi.openSettingsWindow();
-                }}
+                onClick={openSettingsWindow}
               >
                 <svg viewBox="0 0 24 24">
                   <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
@@ -240,9 +155,7 @@ function App() {
                 type="button"
                 className={`ghost-icon${windowState?.isPinned ? ' is-active' : ''}`}
                 aria-label="固定窗口"
-                onClick={() => {
-                  void handleTogglePin();
-                }}
+                onClick={togglePinnedWindow}
               >
                 <svg viewBox="0 0 24 24">
                   <path d="m9 5 6 0 0 4 2.8 2.7-4.3.8-.2 6.5H10.7l-.2-6.5-4.3-.8L9 9Z" />
@@ -292,9 +205,7 @@ function App() {
             }}
             onToggleExpanded={toggleExpanded}
             onShowInFinder={handleShowInFinder}
-            onCopyPath={(path) => {
-              void navigator.clipboard.writeText(path);
-            }}
+            onCopyPath={writePathToClipboard}
             setRowRef={setRowRef}
             preloadRef={preloadRef}
           />
@@ -306,9 +217,7 @@ function App() {
               type="button"
               className="tool-action"
               disabled={selectedClipBusy}
-              onClick={() => {
-                runSelectedAsync(handleCopy);
-              }}
+              onClick={copySelectedClip}
             >
               <span className="fab fab-primary">
                 <svg viewBox="0 0 24 24">
@@ -323,9 +232,7 @@ function App() {
               type="button"
               className="tool-action"
               disabled={selectedClipBusy}
-              onClick={() => {
-                runSelectedAsync(handlePasteAndHide);
-              }}
+              onClick={pasteSelectedClip}
             >
               <span className="fab fab-muted">
                 <svg viewBox="0 0 24 24">
@@ -339,9 +246,7 @@ function App() {
               type="button"
               className="tool-action"
               disabled={selectedClipBusy}
-              onClick={() => {
-                runSelectedAsync(handleToggleFavorite);
-              }}
+              onClick={toggleFavoriteForSelectedClip}
             >
               <span
                 className={`fab fab-favorite${
@@ -359,9 +264,7 @@ function App() {
               type="button"
               className="tool-action"
               disabled={clearDisabled}
-              onClick={() => {
-                void handleClearCurrent();
-              }}
+              onClick={clearCurrentClips}
             >
               <span className="fab fab-muted">
                 <svg viewBox="0 0 24 24">

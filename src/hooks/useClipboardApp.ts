@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { PAGE_SIZE, type CategoryKey } from '../features/clips/clip-utils';
+import { useDebouncedValue } from './useDebouncedValue';
 import { clipboardApi } from '../lib/clipboard-api';
 import type { ClipCounts, ClipFilter, ClipItem, WindowState } from '../types';
 import {
   buildTabStateKey,
   CATEGORY_ORDER,
   EMPTY_TAB_SNAPSHOT,
-  PAGE_SIZE,
-  type CategoryKey,
   type TabSnapshot,
 } from '../features/clips/clip-utils';
 
@@ -15,23 +15,47 @@ function isEditableTarget(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;
   return Boolean(
     element &&
-      (element.tagName === 'INPUT' ||
-        element.tagName === 'TEXTAREA' ||
-        element.isContentEditable),
+    (element.tagName === 'INPUT' ||
+      element.tagName === 'TEXTAREA' ||
+      element.isContentEditable),
   );
 }
 
+function getNextListIndex(length: number, currentIndex: number, delta: number) {
+  if (length === 0 || currentIndex === -1) {
+    return -1;
+  }
+
+  return delta > 0
+    ? Math.min(length - 1, currentIndex + delta)
+    : Math.max(0, currentIndex + delta);
+}
+
+function getNextCategory(
+  activeCategory: CategoryKey,
+  delta: number,
+): CategoryKey | null {
+  const currentIndex = CATEGORY_ORDER.indexOf(activeCategory);
+  if (currentIndex === -1) {
+    return null;
+  }
+
+  const nextIndex =
+    (currentIndex + delta + CATEGORY_ORDER.length) % CATEGORY_ORDER.length;
+  return CATEGORY_ORDER[nextIndex] ?? null;
+}
+
 export function useClipboardApp() {
-  const queryRef = useRef('');
-  const filterRef = useRef<ClipFilter>('all');
+  const [searchText, setSearchText] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<CategoryKey>('all');
+  const query = useDebouncedValue(searchText, 120, !isComposing);
+  const filter: ClipFilter = activeCategory;
+  const queryRef = useRef(query);
+  const filterRef = useRef(filter);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const rowRefs = useRef<Record<number, HTMLElement | null>>({});
   const tabStateRef = useRef<Record<string, TabSnapshot>>({});
-
-  const [searchText, setSearchText] = useState('');
-  const [query, setQuery] = useState('');
-  const [isComposing, setIsComposing] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<CategoryKey>('all');
   const [clips, setClips] = useState<ClipItem[]>([]);
   const [counts, setCounts] = useState<ClipCounts>({
     text: 0,
@@ -48,7 +72,6 @@ export function useClipboardApp() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<number | null>(null);
   const [expandedClipIds, setExpandedClipIds] = useState<number[]>([]);
-  const filter: ClipFilter = activeCategory;
   const tabStateKey = buildTabStateKey(query, filter);
   const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? null;
 
@@ -133,20 +156,6 @@ export function useClipboardApp() {
       unsubscribeClips();
     };
   }, []);
-
-  useEffect(() => {
-    if (isComposing) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setQuery(searchText);
-    }, 120);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [isComposing, searchText]);
 
   useEffect(() => {
     setLoading(true);
@@ -271,26 +280,21 @@ export function useClipboardApp() {
     }
 
     const currentIndex = clips.findIndex((clip) => clip.id === selectedClip.id);
-    if (currentIndex === -1) {
+    const nextIndex = getNextListIndex(clips.length, currentIndex, delta);
+    if (nextIndex === -1) {
       return;
     }
 
-    const nextIndex =
-      delta > 0
-        ? Math.min(clips.length - 1, currentIndex + delta)
-        : Math.max(0, currentIndex + delta);
     setSelectedClipId(clips[nextIndex]?.id ?? selectedClip.id);
   };
 
   const selectRelativeCategory = (delta: number) => {
-    const currentIndex = CATEGORY_ORDER.indexOf(activeCategory);
-    if (currentIndex === -1) {
+    const nextCategory = getNextCategory(activeCategory, delta);
+    if (!nextCategory) {
       return;
     }
 
-    const nextIndex =
-      (currentIndex + delta + CATEGORY_ORDER.length) % CATEGORY_ORDER.length;
-    setActiveCategory(CATEGORY_ORDER[nextIndex] ?? activeCategory);
+    setActiveCategory(nextCategory);
   };
 
   const toggleExpanded = (id: number) => {

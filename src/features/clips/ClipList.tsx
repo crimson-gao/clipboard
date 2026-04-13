@@ -140,13 +140,15 @@ export function ClipList({
     );
   }
 
+  const expandedClipIdSet = new Set(expandedClipIds);
+  const preloadIndex = Math.max(clips.length - 5, 0);
+
   return (
     <div className="entries-list">
       {clips.map((clip, index) => {
         const isSelected = clip.id === selectedClipId;
         const summary = getClipSummary(clip);
         const meta = getClipMeta(clip);
-        const preloadIndex = Math.max(clips.length - 5, 0);
         const rowRef = index === preloadIndex ? preloadRef : undefined;
         const sharedRowProps = {
           clip,
@@ -247,7 +249,7 @@ export function ClipList({
           );
         }
 
-        const isExpanded = expandedClipIds.includes(clip.id);
+        const isExpanded = expandedClipIdSet.has(clip.id);
         return (
           <ClipRow key={clip.id} {...sharedRowProps}>
             <div className="text-content">

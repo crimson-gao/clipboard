@@ -34,11 +34,13 @@ describe('SettingsPanel', () => {
     });
 
     expect(updates).toHaveLength(2);
-    expect(updates[1]({
-      shortcut: 'CommandOrControl+Shift+S',
-      shortcutEnabled: true,
-      showTrayIcon: true,
-    })).toEqual({
+    expect(
+      updates[1]({
+        shortcut: 'CommandOrControl+Shift+S',
+        shortcutEnabled: true,
+        showTrayIcon: true,
+      }),
+    ).toEqual({
       shortcut: 'CommandOrControl+Shift+K',
       shortcutEnabled: true,
       showTrayIcon: true,
@@ -72,11 +74,13 @@ describe('SettingsPanel', () => {
     });
 
     expect(updates).toHaveLength(1);
-    expect(updates[0]({
-      shortcut: 'CommandOrControl+Shift+S',
-      shortcutEnabled: true,
-      showTrayIcon: true,
-    })).toEqual({
+    expect(
+      updates[0]({
+        shortcut: 'CommandOrControl+Shift+S',
+        shortcutEnabled: true,
+        showTrayIcon: true,
+      }),
+    ).toEqual({
       shortcut: '',
       shortcutEnabled: true,
       showTrayIcon: true,

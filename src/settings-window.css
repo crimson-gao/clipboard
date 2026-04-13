@@ -1,14 +1,18 @@
 :root {
   color: #1d2433;
   background:
-    radial-gradient(circle at top left, rgba(255, 212, 125, 0.38), transparent 26%),
-    radial-gradient(circle at top right, rgba(110, 204, 255, 0.24), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 212, 125, 0.38),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(110, 204, 255, 0.24),
+      transparent 24%
+    ),
     linear-gradient(180deg, #fbfcff 0%, #f2f5fb 100%);
-  font-family:
-    "SF Pro Display",
-    "SF Pro Text",
-    "Helvetica Neue",
-    sans-serif;
+  font-family: 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
 }
 
 * {

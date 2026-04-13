@@ -18,7 +18,8 @@ export function AboutApp() {
           <p className="about-eyebrow">Clipboard</p>
           <h1>一个为 macOS 打造的轻量级剪贴板工具</h1>
           <p className="about-summary">
-            使用 Tauri 2、React 和 TypeScript 构建，专注于文本、图片与文件历史的快速查看、收藏和回贴。
+            使用 Tauri 2、React 和 TypeScript
+            构建，专注于文本、图片与文件历史的快速查看、收藏和回贴。
           </p>
           <div className="about-version-row">
             <span className="about-chip">Version {packageJson.version}</span>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import hotkeys from 'hotkeys-js';
 
+const MODIFIER_KEYS = ['meta', 'control', 'ctrl', 'alt', 'shift'];
+
 const SPECIAL_KEY_LABELS: Record<string, string> = {
   arrowup: 'Up',
   arrowdown: 'Down',
@@ -32,10 +34,12 @@ function hasModifier(event: React.KeyboardEvent<HTMLInputElement>): boolean {
 }
 
 function isModifierOnly(key: string): boolean {
-  return ['meta', 'control', 'ctrl', 'alt', 'shift'].includes(key);
+  return MODIFIER_KEYS.includes(key);
 }
 
-function normalizePrimaryKey(event: React.KeyboardEvent<HTMLInputElement>): string | null {
+function normalizePrimaryKey(
+  event: React.KeyboardEvent<HTMLInputElement>,
+): string | null {
   const key = event.key.toLowerCase();
 
   if (isModifierOnly(key)) {
@@ -61,7 +65,9 @@ function normalizePrimaryKey(event: React.KeyboardEvent<HTMLInputElement>): stri
   return null;
 }
 
-function serializeShortcut(event: React.KeyboardEvent<HTMLInputElement>): string | null {
+function serializeShortcut(
+  event: React.KeyboardEvent<HTMLInputElement>,
+): string | null {
   const primaryKey = normalizePrimaryKey(event);
   if (!primaryKey) {
     return null;
@@ -153,7 +159,9 @@ export function ShortcutRecorder({
         }}
       />
       <div className="shortcut-recorder-footer">
-        <span className={`shortcut-recorder-badge${isRecording ? ' is-recording' : ''}`}>
+        <span
+          className={`shortcut-recorder-badge${isRecording ? ' is-recording' : ''}`}
+        >
           {isRecording ? '录制中' : '点击后录制'}
         </span>
         <span className="shortcut-recorder-hint">

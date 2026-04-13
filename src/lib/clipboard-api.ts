@@ -16,13 +16,21 @@ type EventUnlisten = () => void;
 
 function subscribeEvent(event: string, listener: () => void): Unsubscribe {
   let unlisten: EventUnlisten | null = null;
+  let isDisposed = false;
+
   void listen(event, () => {
     listener();
   }).then((dispose) => {
+    if (isDisposed) {
+      dispose();
+      return;
+    }
+
     unlisten = dispose;
   });
 
   return () => {
+    isDisposed = true;
     unlisten?.();
   };
 }

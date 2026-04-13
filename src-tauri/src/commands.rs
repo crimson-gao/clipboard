@@ -181,3 +181,9 @@ pub fn update_window_settings(
 pub fn open_settings_window(app: AppHandle) -> Result<(), String> {
     window::open_settings_window(&app)
 }
+
+#[tauri::command]
+pub fn hide_main_window(app: AppHandle) -> Result<(), String> {
+    window::close_main_window(&app);
+    Ok(())
+}

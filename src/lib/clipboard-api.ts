@@ -68,6 +68,7 @@ export const clipboardApi = {
       showTrayIcon,
     }),
   openSettingsWindow: (): Promise<void> => invoke('open_settings_window'),
+  hideMainWindow: (): Promise<void> => invoke('hide_main_window'),
   subscribeClipsChanged: (listener: () => void): Unsubscribe =>
     subscribeEvent('clips:changed', listener),
 };

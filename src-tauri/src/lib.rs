@@ -11,7 +11,7 @@ mod window;
 
 use commands::{
     clear_current_clips, copy_clip, get_clip_counts, get_clip_image_preview, get_window_state,
-    list_clips_page, open_settings_window, paste_clip_and_hide, show_clip_in_finder,
+    hide_main_window, list_clips_page, open_settings_window, paste_clip_and_hide, show_clip_in_finder,
     toggle_favorite, toggle_pin_window, update_window_settings,
 };
 use events::{TRAY_ABOUT_MENU_ID, TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID};
@@ -95,6 +95,7 @@ pub fn run() {
             get_window_state,
             update_window_settings,
             open_settings_window,
+            hide_main_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -18,6 +18,7 @@ const {
   mockToggleFavorite,
   mockUpdateWindowSettings,
   mockOpenSettingsWindow,
+  mockHideMainWindow,
 } = vi.hoisted(() => ({
   mockListClipsPage:
     vi.fn<
@@ -42,6 +43,7 @@ const {
       ) => Promise<WindowState>
     >(),
   mockOpenSettingsWindow: vi.fn<() => Promise<void>>(),
+  mockHideMainWindow: vi.fn<() => Promise<void>>(),
 }));
 
 vi.mock('../src/lib/clipboard-api', () => ({
@@ -54,6 +56,7 @@ vi.mock('../src/lib/clipboard-api', () => ({
     toggleFavorite: mockToggleFavorite,
     updateWindowSettings: mockUpdateWindowSettings,
     openSettingsWindow: mockOpenSettingsWindow,
+    hideMainWindow: mockHideMainWindow,
     getClipImagePreview: vi.fn(),
     clearCurrentClips: vi.fn().mockResolvedValue(true),
     showClipInFinder: vi.fn().mockResolvedValue(true),
@@ -142,6 +145,7 @@ describe('App', () => {
     mockPasteClipAndHide.mockResolvedValue(true);
     mockToggleFavorite.mockResolvedValue(null);
     mockOpenSettingsWindow.mockResolvedValue();
+    mockHideMainWindow.mockResolvedValue();
     mockUpdateWindowSettings.mockImplementation(
       async (shortcut, shortcutEnabled, showTrayIcon) => ({
         isPinned: false,
@@ -186,6 +190,18 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(mockOpenSettingsWindow).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('hides the main window when Escape is pressed', async () => {
+    render(<App />);
+
+    await screen.findByText('first clip');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(mockHideMainWindow).toHaveBeenCalledTimes(1);
     });
   });
 });

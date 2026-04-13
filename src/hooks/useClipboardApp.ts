@@ -343,6 +343,12 @@ export function useClipboardApp() {
         return;
       }
 
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        void clipboardApi.hideMainWindow();
+        return;
+      }
+
       if (!selectedClip) {
         return;
       }

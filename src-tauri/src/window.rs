@@ -1,18 +1,25 @@
-use tauri::{AppHandle, Manager, PhysicalPosition, Position, WebviewUrl, WebviewWindowBuilder};
+use std::sync::{Arc, Mutex};
 
-#[cfg(target_os = "macos")]
-use objc2_app_kit::{
-    NSApplicationActivationOptions, NSMainMenuWindowLevel, NSRunningApplication, NSWindow,
-    NSWindowCollectionBehavior, NSWorkspace,
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
+
+use objc2::MainThreadMarker;
+use objc2_app_kit::{
+    NSApplicationActivationOptions, NSEvent, NSMainMenuWindowLevel, NSRunningApplication, NSScreen,
+    NSWindow, NSWindowCollectionBehavior, NSWorkspace,
+};
+use objc2_foundation::{NSPoint, NSRect};
 
 use crate::store::ClipboardState;
 
-#[cfg(target_os = "macos")]
+fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+    app.get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())
+}
+
 fn with_main_ns_window<T>(app: &AppHandle, f: impl FnOnce(&NSWindow) -> T) -> Result<T, String> {
-    let Some(window) = app.get_webview_window("main") else {
-        return Err("main window not found".to_string());
-    };
+    let window = main_window(app)?;
     let ns_window = window.ns_window().map_err(|error| error.to_string())?;
     let ns_window = ns_window.cast::<NSWindow>();
     let ns_window =
@@ -20,12 +27,6 @@ fn with_main_ns_window<T>(app: &AppHandle, f: impl FnOnce(&NSWindow) -> T) -> Re
     Ok(f(ns_window))
 }
 
-#[cfg(not(target_os = "macos"))]
-fn with_main_ns_window<T>(_app: &AppHandle, _f: impl FnOnce(&()) -> T) -> Result<T, String> {
-    Err("macOS only".to_string())
-}
-
-#[cfg(target_os = "macos")]
 pub fn apply_main_window_overlay(app: &AppHandle, hides_on_deactivate: bool) -> Result<(), String> {
     with_main_ns_window(app, |ns_window| {
         let collection_behavior = ns_window.collectionBehavior()
@@ -40,15 +41,6 @@ pub fn apply_main_window_overlay(app: &AppHandle, hides_on_deactivate: bool) -> 
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn apply_main_window_overlay(
-    _app: &AppHandle,
-    _hides_on_deactivate: bool,
-) -> Result<(), String> {
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
 fn order_main_window_front(app: &AppHandle) -> Result<(), String> {
     with_main_ns_window(app, |ns_window| {
         ns_window.makeKeyAndOrderFront(None);
@@ -57,18 +49,8 @@ fn order_main_window_front(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
-fn order_main_window_front(_app: &AppHandle) -> Result<(), String> {
-    Ok(())
-}
-
 pub fn configure_main_window_overlay(app: &AppHandle) {
-    let hides_on_deactivate = app
-        .state::<ClipboardState>()
-        .with_store(|store| Ok(!store.is_pinned))
-        .unwrap_or(true);
-
-    let _ = apply_main_window_overlay(app, hides_on_deactivate);
+    let _ = apply_main_window_overlay(app, should_auto_hide_main_window(app));
 }
 
 pub fn should_auto_hide_main_window(app: &AppHandle) -> bool {
@@ -78,17 +60,15 @@ pub fn should_auto_hide_main_window(app: &AppHandle) -> bool {
 }
 
 pub fn close_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Ok(window) = main_window(app) {
         let _ = window.hide();
     }
 }
 
-#[cfg(target_os = "macos")]
 fn current_process_pid() -> i32 {
     std::process::id() as i32
 }
 
-#[cfg(target_os = "macos")]
 fn frontmost_application_pid() -> Option<i32> {
     let workspace = NSWorkspace::sharedWorkspace();
     workspace
@@ -96,7 +76,6 @@ fn frontmost_application_pid() -> Option<i32> {
         .map(|application| application.processIdentifier())
 }
 
-#[cfg(target_os = "macos")]
 pub fn remember_frontmost_application(state: &ClipboardState) -> Result<(), String> {
     let pid = frontmost_application_pid().filter(|pid| *pid != current_process_pid());
     let mut last_target_app_pid = state
@@ -107,12 +86,6 @@ pub fn remember_frontmost_application(state: &ClipboardState) -> Result<(), Stri
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn remember_frontmost_application(_state: &ClipboardState) -> Result<(), String> {
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
 pub fn activate_application(pid: i32) -> Result<bool, String> {
     let Some(application) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
     else {
@@ -121,65 +94,85 @@ pub fn activate_application(pid: i32) -> Result<bool, String> {
     Ok(application.activateWithOptions(NSApplicationActivationOptions::empty()))
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn activate_application(_pid: i32) -> Result<bool, String> {
-    Ok(false)
-}
-
 pub fn open_main_window(app: &AppHandle, remember_target: bool) {
     if remember_target {
         let state = app.state::<ClipboardState>();
         let _ = remember_frontmost_application(&state);
     }
-    if let Some(window) = app.get_webview_window("main") {
-        let is_pinned = app
-            .state::<ClipboardState>()
-            .with_store(|store| Ok(store.is_pinned))
-            .unwrap_or(false);
-        let _ = apply_main_window_overlay(app, !is_pinned);
+    if let Ok(window) = main_window(app) {
+        let auto_hide = should_auto_hide_main_window(app);
+        let _ = apply_main_window_overlay(app, auto_hide);
         let _ = window.unminimize();
         let _ = window.show();
-        #[cfg(target_os = "macos")]
         let _ = activate_application(current_process_pid());
-        if !is_pinned {
+        if auto_hide {
             let _ = window.set_focus();
         }
         let _ = order_main_window_front(app);
     }
 }
 
-pub fn move_main_window_to_point(app: &AppHandle, point: PhysicalPosition<f64>) -> Result<(), String> {
-    let target_monitor = app
-        .monitor_from_point(point.x, point.y)
+fn rect_contains_point(rect: NSRect, point: NSPoint) -> bool {
+    point.x >= rect.origin.x
+        && point.x <= rect.origin.x + rect.size.width
+        && point.y >= rect.origin.y
+        && point.y <= rect.origin.y + rect.size.height
+}
+
+fn move_main_window_to_active_screen_native(app: &AppHandle) -> Result<(), String> {
+    let result = Arc::new(Mutex::new(None::<Result<(), String>>));
+    let result_slot = Arc::clone(&result);
+    let app_handle = app.clone();
+
+    app.run_on_main_thread(move || {
+        let outcome = (|| -> Result<(), String> {
+            let mtm = MainThreadMarker::new()
+                .ok_or_else(|| "failed to access AppKit main thread".to_string())?;
+            let mouse_location = NSEvent::mouseLocation();
+            let screens = NSScreen::screens(mtm);
+            let target_screen = screens
+                .iter()
+                .find(|screen| rect_contains_point(screen.frame(), mouse_location))
+                .or_else(|| NSScreen::mainScreen(mtm))
+                .ok_or_else(|| "failed to resolve active screen".to_string())?;
+
+            with_main_ns_window(&app_handle, |ns_window| {
+                let window_frame = ns_window.frame();
+                let visible_frame = target_screen.visibleFrame();
+
+                let centered_x = visible_frame.origin.x
+                    + ((visible_frame.size.width - window_frame.size.width).max(0.0) / 2.0);
+                let centered_y = visible_frame.origin.y
+                    + ((visible_frame.size.height - window_frame.size.height).max(0.0) / 2.0);
+
+                ns_window.setFrameTopLeftPoint(NSPoint::new(
+                    centered_x,
+                    centered_y + window_frame.size.height,
+                ));
+            })?;
+
+            Ok(())
+        })();
+
+        if let Ok(mut slot) = result_slot.lock() {
+            *slot = Some(outcome);
+        }
+    })
+    .map_err(|error| error.to_string())?;
+
+    let outcome = result
+        .lock()
         .map_err(|error| error.to_string())?
-        .or_else(|| app.primary_monitor().ok().flatten());
+        .take()
+        .unwrap_or_else(|| Err("failed to apply native window positioning".to_string()));
+    outcome
+}
 
-    let Some(target_monitor) = target_monitor else {
-        return Ok(());
-    };
-
-    let Some(window) = app.get_webview_window("main") else {
-        return Err("main window not found".to_string());
-    };
-
-    let window_size = window.outer_size().map_err(|error| error.to_string())?;
-    let work_area = target_monitor.work_area();
-
-    let available_width = i64::from(work_area.size.width);
-    let available_height = i64::from(work_area.size.height);
-    let window_width = i64::from(window_size.width);
-    let window_height = i64::from(window_size.height);
-
-    let centered_x = i64::from(work_area.position.x) + ((available_width - window_width).max(0) / 2);
-    let centered_y =
-        i64::from(work_area.position.y) + ((available_height - window_height).max(0) / 2);
-
-    window
-        .set_position(Position::Physical(PhysicalPosition::new(
-            centered_x as i32,
-            centered_y as i32,
-        )))
-        .map_err(|error| error.to_string())
+pub fn move_main_window_to_point(
+    app: &AppHandle,
+    _point: PhysicalPosition<f64>,
+) -> Result<(), String> {
+    move_main_window_to_active_screen_native(app)
 }
 
 pub fn open_main_window_at_point(
@@ -187,10 +180,11 @@ pub fn open_main_window_at_point(
     remember_target: bool,
     point: Option<PhysicalPosition<f64>>,
 ) {
+    open_main_window(app, remember_target);
     if let Some(point) = point {
         let _ = move_main_window_to_point(app, point);
+        let _ = order_main_window_front(app);
     }
-    open_main_window(app, remember_target);
 }
 
 pub fn toggle_main_window_at_point(
@@ -198,13 +192,13 @@ pub fn toggle_main_window_at_point(
     remember_target: bool,
     point: Option<PhysicalPosition<f64>>,
 ) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Ok(window) = main_window(app) {
         if window.is_visible().unwrap_or(false) {
             close_main_window(app);
-        } else {
-            open_main_window_at_point(app, remember_target, point);
+            return;
         }
     }
+    open_main_window_at_point(app, remember_target, point);
 }
 
 pub fn open_about_window(app: &AppHandle) -> Result<(), String> {

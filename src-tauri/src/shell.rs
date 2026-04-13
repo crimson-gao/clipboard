@@ -1,6 +1,5 @@
 use std::{collections::HashSet, process::Command, thread, time::Duration};
 
-#[cfg(target_os = "macos")]
 use core_graphics::{
     event::{CGEvent, CGEventFlags, CGEventTapLocation, CGKeyCode},
     event_source::{CGEventSource, CGEventSourceStateID},
@@ -56,11 +55,10 @@ pub fn ensure_tray_icon(app: &AppHandle, visible: bool) -> Result<(), String> {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
-                position,
                 ..
             } = event
             {
-                toggle_main_window_at_point(&app_handle, true, Some(position));
+                toggle_main_window_for_current_display(&app_handle, true);
             }
         })
         .build(app)
@@ -74,19 +72,18 @@ fn cursor_position(app: &AppHandle) -> Option<PhysicalPosition<f64>> {
 }
 
 pub fn toggle_main_window_for_current_display(app: &AppHandle, remember_target: bool) {
-    let point = cursor_position(app);
-    toggle_main_window_at_point(app, remember_target, point);
+    toggle_main_window_at_point(app, remember_target, cursor_position(app));
 }
 
 pub fn configure_shell(app: &AppHandle) -> Result<(), String> {
-    let show_tray_icon = app
-        .state::<ClipboardState>()
-        .with_store(|store| Ok(store.show_tray_icon))?;
-    ensure_tray_icon(app, show_tray_icon)?;
+    ensure_tray_icon(
+        app,
+        app.state::<ClipboardState>()
+            .with_store(|store| Ok(store.show_tray_icon))?,
+    )?;
     configure_shortcut(app)
 }
 
-#[cfg(target_os = "macos")]
 fn post_command_v() -> Result<(), String> {
     const COMMAND_KEY_CODE: CGKeyCode = 55;
     const V_KEY_CODE: CGKeyCode = 9;
@@ -113,28 +110,20 @@ fn post_command_v() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
-fn post_command_v() -> Result<(), String> {
-    Ok(())
-}
-
 pub fn paste_into_previous_application(state: &ClipboardState) {
-    #[cfg(target_os = "macos")]
-    {
-        let target_pid = state
-            .last_target_app_pid
-            .lock()
-            .ok()
-            .and_then(|guard| *guard);
+    let target_pid = state
+        .last_target_app_pid
+        .lock()
+        .ok()
+        .and_then(|guard| *guard);
 
-        thread::spawn(move || {
-            if let Some(pid) = target_pid {
-                let _ = crate::window::activate_application(pid);
-                thread::sleep(Duration::from_millis(120));
-            }
-            let _ = post_command_v();
-        });
-    }
+    thread::spawn(move || {
+        if let Some(pid) = target_pid {
+            let _ = crate::window::activate_application(pid);
+            thread::sleep(Duration::from_millis(120));
+        }
+        let _ = post_command_v();
+    });
 }
 
 pub fn copy_selected_clip(
@@ -269,7 +258,8 @@ pub fn update_window_settings(
 }
 
 pub fn configure_shortcut(app: &AppHandle) -> Result<(), String> {
-    let (shortcut, shortcut_enabled) = app.state::<ClipboardState>().with_store(|store| {
+    let state = app.state::<ClipboardState>();
+    let (shortcut, shortcut_enabled) = state.with_store(|store| {
         Ok((
             store
                 .shortcut

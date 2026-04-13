@@ -1,3 +1,6 @@
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+compile_error!("This app only supports macOS on Apple Silicon.");
+
 mod clipboard;
 mod commands;
 mod events;
@@ -57,7 +60,6 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);
 
             let state = ClipboardState::load(app.handle())?;

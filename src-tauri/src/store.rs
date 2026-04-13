@@ -17,7 +17,6 @@ use crate::{
 pub const DEFAULT_PAGE_SIZE: usize = 30;
 const RETENTION_HOURS: i64 = 24 * 7;
 pub const DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+S";
-const LEGACY_DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+V";
 
 pub struct UpsertClipInput {
     pub kind: String,
@@ -111,26 +110,29 @@ impl ClipboardState {
     }
 }
 
+fn default_store() -> PersistedStore {
+    PersistedStore {
+        clips: Vec::new(),
+        next_id: 1,
+        data_version: default_data_version(),
+        is_pinned: false,
+        shortcut: Some(DEFAULT_SHORTCUT.to_string()),
+        shortcut_enabled: default_shortcut_enabled(),
+        show_tray_icon: default_show_tray_icon(),
+    }
+}
+
 pub fn load_store(path: &Path) -> PersistedStore {
     fs::read(path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<PersistedStore>(&bytes).ok())
-        .unwrap_or_else(|| PersistedStore {
-            clips: Vec::new(),
-            next_id: 1,
-            data_version: 1,
-            is_pinned: false,
-            shortcut: Some(DEFAULT_SHORTCUT.to_string()),
-            shortcut_enabled: true,
-            show_tray_icon: true,
-        })
+        .unwrap_or_else(default_store)
 }
 
 fn migrate_store(store: &mut PersistedStore) {
-    if store.shortcut.is_none() || store.shortcut.as_deref() == Some(LEGACY_DEFAULT_SHORTCUT) {
-        store.shortcut = Some(DEFAULT_SHORTCUT.to_string());
-    }
-
+    store
+        .shortcut
+        .get_or_insert_with(|| DEFAULT_SHORTCUT.to_string());
     if store.next_id <= 0 {
         store.next_id = store.clips.iter().map(|clip| clip.id).max().unwrap_or(0) + 1;
     }

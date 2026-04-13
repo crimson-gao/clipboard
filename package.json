@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "tauri dev",
     "dev:web": "vite --host 127.0.0.1",
-    "build": "tauri build",
+    "build": "npm run build:app && npm run package:dmg",
+    "build:app": "tauri build --bundles app",
     "build:web": "tsc -b && vite build",
+    "package:dmg": "./scripts/package-dmg.sh",
     "typecheck": "tsc -b",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --check .",

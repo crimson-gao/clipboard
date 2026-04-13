@@ -8,6 +8,7 @@ use crate::{
         build_counts, current_window_state, matches_filter, matches_query, ClipboardState,
         DEFAULT_PAGE_SIZE,
     },
+    window,
 };
 
 #[tauri::command]
@@ -174,4 +175,9 @@ pub fn update_window_settings(
     show_tray_icon: bool,
 ) -> Result<WindowState, String> {
     shell::update_window_settings(&app, &state, shortcut, shortcut_enabled, show_tray_icon)
+}
+
+#[tauri::command]
+pub fn open_settings_window(app: AppHandle) -> Result<(), String> {
+    window::open_settings_window(&app)
 }

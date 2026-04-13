@@ -1,19 +1,19 @@
 ---
 name: Feature request
-about: Suggest a focused improvement
+about: Suggest a focused improvement / 提交功能建议
 title: '[Feature] '
 labels: enhancement
 assignees: ''
 ---
 
-## Problem
+## Problem / 要解决的问题
 
-What user problem are you trying to solve?
+What user problem are you trying to solve? / 你希望解决什么用户问题？
 
-## Proposed solution
+## Proposed solution / 建议方案
 
-Describe the smallest useful change.
+Describe the smallest useful change. / 描述最小可行的改动。
 
-## Alternatives considered
+## Alternatives considered / 考虑过的替代方案
 
-## Extra context
+## Extra context / 补充信息

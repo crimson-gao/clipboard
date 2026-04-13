@@ -12,6 +12,7 @@ const {
   mockPasteClipAndHide,
   mockToggleFavorite,
   mockUpdateWindowSettings,
+  mockOpenSettingsWindow,
 } = vi.hoisted(() => ({
   mockListClipsPage: vi.fn<
     (query?: string, filter?: string, offset?: number, limit?: number) => Promise<PaginatedClips>
@@ -28,6 +29,7 @@ const {
       showTrayIcon: boolean,
     ) => Promise<WindowState>
   >(),
+  mockOpenSettingsWindow: vi.fn<() => Promise<void>>(),
 }));
 
 vi.mock('../src/lib/clipboard-api', () => ({
@@ -39,12 +41,12 @@ vi.mock('../src/lib/clipboard-api', () => ({
     pasteClipAndHide: mockPasteClipAndHide,
     toggleFavorite: mockToggleFavorite,
     updateWindowSettings: mockUpdateWindowSettings,
+    openSettingsWindow: mockOpenSettingsWindow,
     getClipImagePreview: vi.fn(),
     clearCurrentClips: vi.fn().mockResolvedValue(true),
     showClipInFinder: vi.fn().mockResolvedValue(true),
     togglePinWindow: vi.fn(),
     subscribeClipsChanged: vi.fn(() => () => {}),
-    subscribeOpenSettings: vi.fn(() => () => {}),
   },
 }));
 
@@ -127,6 +129,7 @@ describe('App', () => {
     mockCopyClip.mockResolvedValue(true);
     mockPasteClipAndHide.mockResolvedValue(true);
     mockToggleFavorite.mockResolvedValue(null);
+    mockOpenSettingsWindow.mockResolvedValue();
     mockUpdateWindowSettings.mockImplementation(
       async (shortcut, shortcutEnabled, showTrayIcon) => ({
         isPinned: false,
@@ -161,7 +164,7 @@ describe('App', () => {
     });
   });
 
-  it('debounces settings autosave through the backend API', async () => {
+  it('opens settings in a dedicated window', async () => {
     const user = userEvent.setup();
 
     render(<App />);
@@ -169,25 +172,8 @@ describe('App', () => {
     await screen.findByRole('button', { name: '设置' });
     await user.click(screen.getByRole('button', { name: '设置' }));
 
-    const shortcutInput = await screen.findByPlaceholderText(
-      'CommandOrControl+Shift+S',
-    );
-
-    await user.click(shortcutInput);
-    fireEvent.keyDown(shortcutInput, {
-      key: 'k',
-      metaKey: true,
-      shiftKey: true,
-    });
-
-    expect(mockUpdateWindowSettings).not.toHaveBeenCalled();
-
     await waitFor(() => {
-      expect(mockUpdateWindowSettings).toHaveBeenLastCalledWith(
-        'CommandOrControl+Shift+K',
-        true,
-        true,
-      );
+      expect(mockOpenSettingsWindow).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -3,14 +3,11 @@ import { useEffect, useRef, useState } from 'react';
 import { clipboardApi } from '../lib/clipboard-api';
 import type { ClipCounts, ClipFilter, ClipItem, WindowState } from '../types';
 import {
-  buildSettingsDraft,
   buildTabStateKey,
   CATEGORY_ORDER,
   EMPTY_TAB_SNAPSHOT,
-  hasSettingsDraftChanges,
   PAGE_SIZE,
   type CategoryKey,
-  type SettingsDraft,
   type TabSnapshot,
 } from '../features/clips/clip-utils';
 
@@ -51,12 +48,6 @@ export function useClipboardApp() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<number | null>(null);
   const [expandedClipIds, setExpandedClipIds] = useState<number[]>([]);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>({
-    shortcut: '',
-    shortcutEnabled: true,
-    showTrayIcon: true,
-  });
   const filter: ClipFilter = activeCategory;
   const tabStateKey = buildTabStateKey(query, filter);
   const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? null;
@@ -106,14 +97,6 @@ export function useClipboardApp() {
   }, [query, filter]);
 
   useEffect(() => {
-    if (!settingsOpen || !windowState) {
-      return;
-    }
-
-    setSettingsDraft(buildSettingsDraft(windowState));
-  }, [settingsOpen, windowState]);
-
-  useEffect(() => {
     void clipboardApi.getWindowState().then(setWindowState);
     void refreshCounts();
     void loadClips();
@@ -121,13 +104,9 @@ export function useClipboardApp() {
     const unsubscribeClips = clipboardApi.subscribeClipsChanged(() => {
       void refreshCounts();
     });
-    const unsubscribeOpenSettings = clipboardApi.subscribeOpenSettings(() => {
-      setSettingsOpen(true);
-    });
 
     return () => {
       unsubscribeClips();
-      unsubscribeOpenSettings();
     };
   }, []);
 
@@ -268,35 +247,6 @@ export function useClipboardApp() {
     setWindowState(next);
   };
 
-  const saveSettingsDraft = async () => {
-    await runWithBusyId(-2, async () => {
-      const next = await clipboardApi.updateWindowSettings(
-        settingsDraft.shortcut.trim(),
-        settingsDraft.shortcutEnabled,
-        settingsDraft.showTrayIcon,
-      );
-      setWindowState(next);
-    });
-  };
-
-  useEffect(() => {
-    if (!settingsOpen || !windowState) {
-      return;
-    }
-
-    if (!hasSettingsDraftChanges(windowState, settingsDraft)) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      void saveSettingsDraft();
-    }, 220);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [settingsDraft, settingsOpen, windowState]);
-
   const toggleExpanded = (id: number) => {
     setExpandedClipIds((current) =>
       current.includes(id)
@@ -333,7 +283,7 @@ export function useClipboardApp() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (settingsOpen || isEditableTarget(event.target)) {
+      if (isEditableTarget(event.target)) {
         return;
       }
 
@@ -387,7 +337,7 @@ export function useClipboardApp() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [activeCategory, clips, selectedClip, settingsOpen]);
+  }, [activeCategory, clips, selectedClip]);
 
   return {
     activeCategory,
@@ -407,11 +357,6 @@ export function useClipboardApp() {
     setRowRef,
     setSearchText,
     setSelectedClipId,
-    settingsDraft,
-    settingsOpen,
-    setSettingsDraft,
-    setSettingsOpen,
-    settingsSaving: busyId === -2,
     toggleExpanded,
     windowState,
     handleClearCurrent,

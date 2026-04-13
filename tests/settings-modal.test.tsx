@@ -1,29 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SettingsModal } from '../src/features/settings/SettingsModal';
+import { SettingsPanel } from '../src/features/settings/SettingsPanel';
 import type { SettingsDraft } from '../src/features/clips/clip-utils';
 
-describe('SettingsModal', () => {
+describe('SettingsPanel', () => {
   it('updates draft fields through callbacks', async () => {
     const user = userEvent.setup();
     const updates: Array<(draft: SettingsDraft) => SettingsDraft> = [];
 
     render(
-      <SettingsModal
+      <SettingsPanel
         draft={{
           shortcut: 'CommandOrControl+Shift+S',
           shortcutEnabled: true,
           showTrayIcon: true,
         }}
         isSaving={false}
-        bindTooltip={() => ({
-          onMouseEnter: () => {},
-          onMouseMove: () => {},
-          onMouseLeave: () => {},
-          onFocus: () => {},
-          onBlur: () => {},
-        })}
-        onClose={() => {}}
         onDraftChange={(updater) => {
           updates.push(updater);
         }}
@@ -58,21 +50,13 @@ describe('SettingsModal', () => {
     const updates: Array<(draft: SettingsDraft) => SettingsDraft> = [];
 
     render(
-      <SettingsModal
+      <SettingsPanel
         draft={{
           shortcut: 'CommandOrControl+Shift+S',
           shortcutEnabled: true,
           showTrayIcon: true,
         }}
         isSaving={false}
-        bindTooltip={() => ({
-          onMouseEnter: () => {},
-          onMouseMove: () => {},
-          onMouseLeave: () => {},
-          onFocus: () => {},
-          onBlur: () => {},
-        })}
-        onClose={() => {}}
         onDraftChange={(updater) => {
           updates.push(updater);
         }}

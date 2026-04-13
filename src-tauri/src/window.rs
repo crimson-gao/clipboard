@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, PhysicalPosition, Position, WebviewUrl, WebviewWindowBuilder};
 
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
@@ -148,12 +148,61 @@ pub fn open_main_window(app: &AppHandle, remember_target: bool) {
     }
 }
 
-pub fn toggle_main_window(app: &AppHandle, remember_target: bool) {
+pub fn move_main_window_to_point(app: &AppHandle, point: PhysicalPosition<f64>) -> Result<(), String> {
+    let target_monitor = app
+        .monitor_from_point(point.x, point.y)
+        .map_err(|error| error.to_string())?
+        .or_else(|| app.primary_monitor().ok().flatten());
+
+    let Some(target_monitor) = target_monitor else {
+        return Ok(());
+    };
+
+    let Some(window) = app.get_webview_window("main") else {
+        return Err("main window not found".to_string());
+    };
+
+    let window_size = window.outer_size().map_err(|error| error.to_string())?;
+    let work_area = target_monitor.work_area();
+
+    let available_width = i64::from(work_area.size.width);
+    let available_height = i64::from(work_area.size.height);
+    let window_width = i64::from(window_size.width);
+    let window_height = i64::from(window_size.height);
+
+    let centered_x = i64::from(work_area.position.x) + ((available_width - window_width).max(0) / 2);
+    let centered_y =
+        i64::from(work_area.position.y) + ((available_height - window_height).max(0) / 2);
+
+    window
+        .set_position(Position::Physical(PhysicalPosition::new(
+            centered_x as i32,
+            centered_y as i32,
+        )))
+        .map_err(|error| error.to_string())
+}
+
+pub fn open_main_window_at_point(
+    app: &AppHandle,
+    remember_target: bool,
+    point: Option<PhysicalPosition<f64>>,
+) {
+    if let Some(point) = point {
+        let _ = move_main_window_to_point(app, point);
+    }
+    open_main_window(app, remember_target);
+}
+
+pub fn toggle_main_window_at_point(
+    app: &AppHandle,
+    remember_target: bool,
+    point: Option<PhysicalPosition<f64>>,
+) {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_visible().unwrap_or(false) {
             close_main_window(app);
         } else {
-            open_main_window(app, remember_target);
+            open_main_window_at_point(app, remember_target, point);
         }
     }
 }
@@ -172,6 +221,26 @@ pub fn open_about_window(app: &AppHandle) -> Result<(), String> {
         .min_inner_size(560.0, 460.0)
         .resizable(true)
         .maximizable(false)
+        .visible(true)
+        .center()
+        .build()
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+pub fn open_settings_window(app: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+        .title("Settings")
+        .inner_size(720.0, 680.0)
+        .min_inner_size(640.0, 520.0)
+        .resizable(true)
         .visible(true)
         .center()
         .build()

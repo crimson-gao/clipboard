@@ -1,13 +1,13 @@
-## Summary
+## Summary / 摘要
 
 -
 
-## Validation
+## Validation / 验证
 
 - [ ] `npm run check`
 - [ ] `npm run test:e2e`
 - [ ] `cd src-tauri && cargo test && cargo clippy -- -D warnings`
 
-## Notes
+## Notes / 备注
 
 -

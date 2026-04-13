@@ -5,7 +5,7 @@ import { Tooltip } from './components/Tooltip';
 import { ClipList } from './features/clips/ClipList';
 import type { Category } from './features/clips/clip-utils';
 import { useClipboardApp } from './hooks/useClipboardApp';
-import { SettingsModal } from './features/settings/SettingsModal';
+import { clipboardApi } from './lib/clipboard-api';
 
 type TooltipState = {
   text: string;
@@ -137,11 +137,6 @@ function App() {
     setRowRef,
     setSearchText,
     setSelectedClipId,
-    settingsDraft,
-    settingsOpen,
-    setSettingsDraft,
-    setSettingsOpen,
-    settingsSaving,
     toggleExpanded,
     windowState,
     handleClearCurrent,
@@ -223,10 +218,10 @@ function App() {
             <div className="topbar-action-item">
               <button
                 type="button"
-                className={`ghost-icon${settingsOpen ? ' is-active' : ''}`}
+                className="ghost-icon"
                 aria-label="设置"
                 onClick={() => {
-                  setSettingsOpen((current) => !current);
+                  void clipboardApi.openSettingsWindow();
                 }}
               >
                 <svg viewBox="0 0 24 24">
@@ -393,20 +388,6 @@ function App() {
       </main>
 
       {tooltip ? <Tooltip {...tooltip} /> : null}
-
-      {settingsOpen ? (
-        <SettingsModal
-          draft={settingsDraft}
-          isSaving={settingsSaving}
-          bindTooltip={bindTooltip}
-          onClose={() => {
-            setSettingsOpen(false);
-          }}
-          onDraftChange={(updater) => {
-            setSettingsDraft((current) => updater(current));
-          }}
-        />
-      ) : null}
     </div>
   );
 }

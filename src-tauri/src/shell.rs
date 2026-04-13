@@ -8,24 +8,20 @@ use core_graphics::{
 use tauri::{
     menu::MenuBuilder,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager,
+    AppHandle, Manager, PhysicalPosition,
 };
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use crate::{
-    events::{OPEN_SETTINGS_EVENT, TRAY_ABOUT_MENU_ID, TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID},
+    events::{TRAY_ABOUT_MENU_ID, TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID},
     models::{ClipItem, WindowState},
     store::{clip_copy_text, current_window_state, ClipboardState, DEFAULT_SHORTCUT},
-    window::{apply_main_window_overlay, toggle_main_window},
+    window::{apply_main_window_overlay, toggle_main_window_at_point},
 };
 
 const TRAY_ID: &str = "main-tray";
-
-pub fn emit_open_settings(app: &AppHandle) {
-    let _ = app.emit(OPEN_SETTINGS_EVENT, ());
-}
 
 pub fn ensure_tray_icon(app: &AppHandle, visible: bool) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
@@ -57,21 +53,29 @@ pub fn ensure_tray_icon(app: &AppHandle, visible: bool) -> Result<(), String> {
         .show_menu_on_left_click(false)
         .tooltip("Clipboard")
         .on_tray_icon_event(move |_tray, event| {
-            if matches!(
-                event,
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    button_state: MouseButtonState::Up,
-                    ..
-                }
-            ) {
-                toggle_main_window(&app_handle, true);
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                position,
+                ..
+            } = event
+            {
+                toggle_main_window_at_point(&app_handle, true, Some(position));
             }
         })
         .build(app)
         .map_err(|error| error.to_string())?;
 
     Ok(())
+}
+
+fn cursor_position(app: &AppHandle) -> Option<PhysicalPosition<f64>> {
+    app.cursor_position().ok()
+}
+
+pub fn toggle_main_window_for_current_display(app: &AppHandle, remember_target: bool) {
+    let point = cursor_position(app);
+    toggle_main_window_at_point(app, remember_target, point);
 }
 
 pub fn configure_shell(app: &AppHandle) -> Result<(), String> {
@@ -290,7 +294,7 @@ pub fn configure_shortcut(app: &AppHandle) -> Result<(), String> {
             if event.state != ShortcutState::Pressed {
                 return;
             }
-            toggle_main_window(app, true);
+            toggle_main_window_for_current_display(app, true);
         })
         .map_err(|error| error.to_string())?;
 

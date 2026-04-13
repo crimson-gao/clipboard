@@ -51,10 +51,15 @@ docs/                   目标、架构与设计文档
 
 ## 文档
 
-- [目标文档](docs/goal.md)
-- [架构说明](docs/architecture.md)
-- [Finder 文件剪贴板格式](docs/clipboard-pasteboard-format.md)
+- [目标文档（中文）](docs/goal.md) / [Product Goals (English)](docs/goal.en.md)
+- [架构说明（中文）](docs/architecture.md) / [Architecture (English)](docs/architecture.en.md)
+- [Finder 文件剪贴板格式（中文）](docs/clipboard-pasteboard-format.md) / [Finder Pasteboard Format (English)](docs/clipboard-pasteboard-format.en.md)
 - [贡献指南](CONTRIBUTING.md)
+
+## CI / Release
+
+- Pull Request / `main` push 会运行检查、测试，并构建 macOS Apple Silicon 安装包 artifact
+- 推送 `v*` tag（例如 `v0.1.0`）会触发 GitHub Release 并上传 Tauri 构建产物
 
 ## 许可证
 
@@ -87,4 +92,9 @@ npm run test:e2e
 cd src-tauri && cargo test && cargo clippy -- -D warnings
 ```
 
-See [docs/architecture.md](docs/architecture.md) and [CONTRIBUTING.md](CONTRIBUTING.md) for implementation and collaboration details.
+See [docs/goal.en.md](docs/goal.en.md), [docs/architecture.en.md](docs/architecture.en.md), and [CONTRIBUTING.md](CONTRIBUTING.md) for implementation and collaboration details.
+
+### CI / Release
+
+- Pull requests and pushes to `main` run checks, tests, and a macOS Apple Silicon bundle build
+- Pushing a `v*` tag (for example `v0.1.0`) triggers a GitHub Release and uploads the Tauri build artifacts

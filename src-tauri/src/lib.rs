@@ -8,16 +8,16 @@ mod window;
 
 use commands::{
     clear_current_clips, copy_clip, get_clip_counts, get_clip_image_preview, get_window_state,
-    list_clips_page, paste_clip_and_hide, show_clip_in_finder, toggle_favorite, toggle_pin_window,
-    update_window_settings,
+    list_clips_page, open_settings_window, paste_clip_and_hide, show_clip_in_finder,
+    toggle_favorite, toggle_pin_window, update_window_settings,
 };
 use events::{TRAY_ABOUT_MENU_ID, TRAY_QUIT_MENU_ID, TRAY_SETTINGS_MENU_ID};
-use shell::{configure_shell, emit_open_settings};
+use shell::configure_shell;
 use store::ClipboardState;
 use tauri::{ActivationPolicy, Manager, WindowEvent};
 use window::{
-    close_main_window, configure_main_window_overlay, open_about_window, open_main_window,
-    should_auto_hide_main_window,
+    close_main_window, configure_main_window_overlay, open_about_window,
+    open_settings_window as open_settings_window_ui, should_auto_hide_main_window,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -31,8 +31,7 @@ pub fn run() {
                 let _ = open_about_window(app);
             }
             TRAY_SETTINGS_MENU_ID => {
-                emit_open_settings(app);
-                open_main_window(app, true);
+                let _ = open_settings_window_ui(app);
             }
             TRAY_QUIT_MENU_ID => {
                 app.exit(0);
@@ -93,6 +92,7 @@ pub fn run() {
             toggle_pin_window,
             get_window_state,
             update_window_settings,
+            open_settings_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

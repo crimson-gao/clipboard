@@ -1,13 +1,13 @@
-name: CI
+name: Release
 
 on:
-  pull_request:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
 
 jobs:
-  checks:
+  verify:
+    name: Verify release tag
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -24,23 +24,19 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-
       - name: Frontend checks
         run: npm run check
-
-      - name: Playwright smoke tests
-        run: npm run test:e2e
 
       - name: Rust checks
         working-directory: src-tauri
         run: cargo test && cargo clippy -- -D warnings
 
-  build-macos:
-    name: Build macOS bundle
+  release:
+    name: Build and release macOS app
     runs-on: macos-14
-    needs: checks
+    needs: verify
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -54,14 +50,16 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Tauri app bundle
-        run: npm run build -- --target aarch64-apple-darwin
-
-      - name: Upload macOS bundle artifact
-        uses: actions/upload-artifact@v4
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0.6.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: clipboard-macos-aarch64-bundle
-          path: |
-            src-tauri/target/aarch64-apple-darwin/release/bundle/**
-            src-tauri/target/release/bundle/**
-          if-no-files-found: error
+          tagName: ${{ github.ref_name }}
+          releaseName: Clipboard ${{ github.ref_name }}
+          releaseBody: |
+            Automated release for ${{ github.ref_name }}.
+          generateReleaseNotes: true
+          releaseDraft: false
+          prerelease: false
+          args: --target aarch64-apple-darwin

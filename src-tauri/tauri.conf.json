@@ -16,9 +16,9 @@
         "title": "Clipboard",
         "label": "main",
         "width": 800,
-        "height": 550,
+        "height": 580,
         "minWidth": 800,
-        "minHeight": 550,
+        "minHeight": 500,
         "resizable": true,
         "fullscreen": false,
         "visible": false

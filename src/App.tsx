@@ -151,6 +151,18 @@ function App() {
   const clearDisabled =
     activeCategory === 'favorite' || clips.length === 0 || busyId !== null;
   const selectedClipBusy = !selectedClip || busyId === selectedClip.id;
+  const runForSelectedClip = (action: (id: number) => void) => {
+    if (!selectedClip) {
+      return;
+    }
+
+    action(selectedClip.id);
+  };
+  const runSelectedAsync = (action: (id: number) => Promise<unknown>) => {
+    runForSelectedClip((id) => {
+      void action(id);
+    });
+  };
 
   const showTooltip = (text: string, x: number, y: number) => {
     setTooltip({ text, x, y });
@@ -178,14 +190,6 @@ function App() {
       hideTooltip();
     },
   });
-
-  const runForSelectedClip = (action: (id: number) => void) => {
-    if (!selectedClip) {
-      return;
-    }
-
-    action(selectedClip.id);
-  };
 
   return (
     <div className="app-shell">
@@ -303,9 +307,7 @@ function App() {
               className="tool-action"
               disabled={selectedClipBusy}
               onClick={() => {
-                runForSelectedClip((id) => {
-                  void handleCopy(id);
-                });
+                runSelectedAsync(handleCopy);
               }}
             >
               <span className="fab fab-primary">
@@ -322,9 +324,7 @@ function App() {
               className="tool-action"
               disabled={selectedClipBusy}
               onClick={() => {
-                runForSelectedClip((id) => {
-                  void handlePasteAndHide(id);
-                });
+                runSelectedAsync(handlePasteAndHide);
               }}
             >
               <span className="fab fab-muted">
@@ -340,9 +340,7 @@ function App() {
               className="tool-action"
               disabled={selectedClipBusy}
               onClick={() => {
-                runForSelectedClip((id) => {
-                  void handleToggleFavorite(id);
-                });
+                runSelectedAsync(handleToggleFavorite);
               }}
             >
               <span

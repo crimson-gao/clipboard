@@ -52,6 +52,29 @@ export function useClipboardApp() {
   const tabStateKey = buildTabStateKey(query, filter);
   const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? null;
 
+  const applyClipPage = (
+    items: ClipItem[],
+    nextOffset: number,
+    nextHasMore: boolean,
+    append: boolean,
+  ) => {
+    setClips((current) => (append ? [...current, ...items] : items));
+    setHasMore(nextHasMore);
+    setOffset(nextOffset);
+    setLoading(false);
+    setLoadingMore(false);
+  };
+
+  const restoreTabSnapshot = (snapshot: TabSnapshot) => {
+    setClips(snapshot.items);
+    setHasMore(snapshot.hasMore);
+    setOffset(snapshot.offset);
+    setSelectedClipId(snapshot.selectedClipId);
+    setExpandedClipIds(snapshot.expandedClipIds);
+    setLoading(false);
+    setLoadingMore(false);
+  };
+
   const writeTabSnapshot = (key: string, snapshot: Partial<TabSnapshot>) => {
     const current = tabStateRef.current[key] ?? EMPTY_TAB_SNAPSHOT;
     tabStateRef.current[key] = { ...current, ...snapshot };
@@ -70,11 +93,12 @@ export function useClipboardApp() {
       nextOffset,
       pageSize,
     );
-    setClips((current) => (append ? [...current, ...page.items] : page.items));
-    setHasMore(page.hasMore);
-    setOffset(nextOffset + page.items.length);
-    setLoading(false);
-    setLoadingMore(false);
+    applyClipPage(
+      page.items,
+      nextOffset + page.items.length,
+      page.hasMore,
+      append,
+    );
   };
 
   const refreshCounts = async () => {
@@ -140,13 +164,7 @@ export function useClipboardApp() {
         );
         return;
       }
-      setClips(cached.items);
-      setHasMore(cached.hasMore);
-      setOffset(cached.offset);
-      setSelectedClipId(cached.selectedClipId);
-      setExpandedClipIds(cached.expandedClipIds);
-      setLoading(false);
-      setLoadingMore(false);
+      restoreTabSnapshot(cached);
       return;
     }
 
@@ -247,6 +265,34 @@ export function useClipboardApp() {
     setWindowState(next);
   };
 
+  const selectRelativeClip = (delta: number) => {
+    if (!selectedClip) {
+      return;
+    }
+
+    const currentIndex = clips.findIndex((clip) => clip.id === selectedClip.id);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const nextIndex =
+      delta > 0
+        ? Math.min(clips.length - 1, currentIndex + delta)
+        : Math.max(0, currentIndex + delta);
+    setSelectedClipId(clips[nextIndex]?.id ?? selectedClip.id);
+  };
+
+  const selectRelativeCategory = (delta: number) => {
+    const currentIndex = CATEGORY_ORDER.indexOf(activeCategory);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const nextIndex =
+      (currentIndex + delta + CATEGORY_ORDER.length) % CATEGORY_ORDER.length;
+    setActiveCategory(CATEGORY_ORDER[nextIndex] ?? activeCategory);
+  };
+
   const toggleExpanded = (id: number) => {
     setExpandedClipIds((current) =>
       current.includes(id)
@@ -289,16 +335,7 @@ export function useClipboardApp() {
 
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
-        const currentIndex = CATEGORY_ORDER.indexOf(activeCategory);
-        if (currentIndex === -1) {
-          return;
-        }
-
-        const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex =
-          (currentIndex + delta + CATEGORY_ORDER.length) %
-          CATEGORY_ORDER.length;
-        setActiveCategory(CATEGORY_ORDER[nextIndex] ?? activeCategory);
+        selectRelativeCategory(event.key === 'ArrowRight' ? 1 : -1);
         return;
       }
 
@@ -308,16 +345,7 @@ export function useClipboardApp() {
 
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
-        const currentIndex = clips.findIndex((clip) => clip.id === selectedClip.id);
-        if (currentIndex === -1) {
-          return;
-        }
-
-        const nextIndex =
-          event.key === 'ArrowDown'
-            ? Math.min(clips.length - 1, currentIndex + 1)
-            : Math.max(0, currentIndex - 1);
-        setSelectedClipId(clips[nextIndex]?.id ?? selectedClip.id);
+        selectRelativeClip(event.key === 'ArrowDown' ? 1 : -1);
         return;
       }
 

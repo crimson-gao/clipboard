@@ -7,8 +7,9 @@
   "scripts": {
     "dev": "tauri dev",
     "dev:web": "vite --host 127.0.0.1",
-    "build": "npm run build:app && npm run package:dmg",
+    "build": "npm run build:dmg",
     "build:app": "tauri build --bundles app",
+    "build:dmg": "npm run build:app && npm run package:dmg",
     "build:web": "tsc -b && vite build",
     "package:dmg": "./scripts/package-dmg.sh",
     "typecheck": "tsc -b",

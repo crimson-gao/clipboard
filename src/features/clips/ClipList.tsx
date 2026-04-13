@@ -34,6 +34,15 @@ type ClipListProps = {
   preloadRef: (node: HTMLElement | null) => void;
 };
 
+type ClipRowProps = {
+  clip: ClipItem;
+  isSelected: boolean;
+  rowRef: (node: HTMLElement | null) => void;
+  onSelect: (id: number) => void;
+  onPaste: (id: number) => void;
+  children: React.ReactNode;
+};
+
 function FavoriteBadge({
   bindTooltip,
 }: {
@@ -49,6 +58,61 @@ function FavoriteBadge({
         <path d="m12 4 2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8Z" />
       </svg>
     </span>
+  );
+}
+
+function ClipMetaInfo({
+  clip,
+  meta,
+  index,
+  bindTooltip,
+}: {
+  clip: ClipItem;
+  meta: string;
+  index: number;
+  bindTooltip: (text: string) => TooltipProps;
+}) {
+  return (
+    <div className="text-meta">
+      {clip.isFavorite ? <FavoriteBadge bindTooltip={bindTooltip} /> : null}
+      <span>{meta}</span>
+      <span>{index + 1}</span>
+    </div>
+  );
+}
+
+function ClipRow({
+  clip,
+  isSelected,
+  rowRef,
+  onSelect,
+  onPaste,
+  children,
+}: ClipRowProps) {
+  const typeClassName =
+    clip.type === 'image'
+      ? 'entry-image'
+      : clip.type === 'file'
+        ? 'entry-file'
+        : 'entry-text';
+
+  return (
+    <article
+      ref={rowRef}
+      className={`entry-row${isSelected ? ' is-selected' : ''} ${typeClassName}`}
+      tabIndex={-1}
+      onFocus={() => {
+        onSelect(clip.id);
+      }}
+      onClick={() => {
+        onSelect(clip.id);
+      }}
+      onDoubleClick={() => {
+        onPaste(clip.id);
+      }}
+    >
+      {children}
+    </article>
   );
 }
 
@@ -84,30 +148,17 @@ export function ClipList({
         const meta = getClipMeta(clip);
         const preloadIndex = Math.max(clips.length - 5, 0);
         const rowRef = index === preloadIndex ? preloadRef : undefined;
-        const commonProps = {
-          ref: setRowRef(clip.id, rowRef),
-          className: `entry-row${isSelected ? ' is-selected' : ''} ${
-            clip.type === 'image'
-              ? 'entry-image'
-              : clip.type === 'file'
-                ? 'entry-file'
-                : 'entry-text'
-          }`,
-          tabIndex: -1,
-          onFocus: () => {
-            onSelect(clip.id);
-          },
-          onClick: () => {
-            onSelect(clip.id);
-          },
-          onDoubleClick: () => {
-            onPaste(clip.id);
-          },
+        const sharedRowProps = {
+          clip,
+          isSelected,
+          rowRef: setRowRef(clip.id, rowRef),
+          onSelect,
+          onPaste,
         };
 
         if (clip.type === 'image') {
           return (
-            <article key={clip.id} {...commonProps}>
+            <ClipRow key={clip.id} {...sharedRowProps}>
               <div className="image-time">
                 {formatUpdatedAt(clip.updatedAt)}
               </div>
@@ -123,14 +174,14 @@ export function ClipList({
                   </div>
                 </div>
               </div>
-            </article>
+            </ClipRow>
           );
         }
 
         if (clip.type === 'file') {
           const primaryFile = clip.filePaths[0] ?? clip.contentText;
           return (
-            <article key={clip.id} {...commonProps}>
+            <ClipRow key={clip.id} {...sharedRowProps}>
               <div className="file-main">
                 <div className="file-icon">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -185,21 +236,20 @@ export function ClipList({
                     <path d="M4.5 10.5h16" />
                   </svg>
                 </button>
-                <div className="text-meta">
-                  {clip.isFavorite ? (
-                    <FavoriteBadge bindTooltip={bindTooltip} />
-                  ) : null}
-                  <span>{meta}</span>
-                  <span>{index + 1}</span>
-                </div>
+                <ClipMetaInfo
+                  clip={clip}
+                  meta={meta}
+                  index={index}
+                  bindTooltip={bindTooltip}
+                />
               </div>
-            </article>
+            </ClipRow>
           );
         }
 
         const isExpanded = expandedClipIds.includes(clip.id);
         return (
-          <article key={clip.id} {...commonProps}>
+          <ClipRow key={clip.id} {...sharedRowProps}>
             <div className="text-content">
               <p
                 className={`entry-title entry-title-text${
@@ -230,16 +280,15 @@ export function ClipList({
                     aria-hidden="true"
                   />
                 )}
-                <div className="text-meta">
-                  {clip.isFavorite ? (
-                    <FavoriteBadge bindTooltip={bindTooltip} />
-                  ) : null}
-                  <span>{meta}</span>
-                  <span>{index + 1}</span>
-                </div>
+                <ClipMetaInfo
+                  clip={clip}
+                  meta={meta}
+                  index={index}
+                  bindTooltip={bindTooltip}
+                />
               </div>
             </div>
-          </article>
+          </ClipRow>
         );
       })}
       {hasMore && loadingMore ? (

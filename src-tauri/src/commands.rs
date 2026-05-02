@@ -1,4 +1,5 @@
 use tauri::{AppHandle, State, WebviewWindow};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 
 use crate::{
     clipboard,
@@ -118,14 +119,23 @@ pub fn paste_clip_and_hide(
     state: State<'_, ClipboardState>,
     id: i64,
 ) -> Result<bool, String> {
-    let copied = copy_clip(app, window.clone(), state.clone(), id)?;
-    if copied {
-        if window.is_visible().unwrap_or(false) {
-            let _ = window.hide();
-        }
-        shell::paste_into_previous_application(&state);
+    let clip =
+        state.with_store(|store| Ok(store.clips.iter().find(|clip| clip.id == id).cloned()))?;
+    let Some(clip) = clip else {
+        return Ok(false);
+    };
+
+    let text = crate::store::clip_copy_text(&clip);
+    app.clipboard()
+        .write_text(text)
+        .map_err(|error| error.to_string())?;
+
+    if window.is_visible().unwrap_or(false) {
+        let _ = window.hide();
     }
-    Ok(copied)
+
+    shell::paste_into_previous_application(&app, &state);
+    Ok(true)
 }
 
 #[tauri::command]

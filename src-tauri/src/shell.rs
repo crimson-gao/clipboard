@@ -54,11 +54,19 @@ pub fn ensure_tray_icon(app: &AppHandle, visible: bool) -> Result<(), String> {
         .on_tray_icon_event(move |_tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
+                button_state,
                 ..
             } = event
             {
-                toggle_main_window_for_current_display(&app_handle, true);
+                match button_state {
+                    MouseButtonState::Down => {
+                        let state = app_handle.state::<crate::store::ClipboardState>();
+                        crate::window::remember_frontmost_application(&state);
+                    }
+                    MouseButtonState::Up => {
+                        toggle_main_window_for_current_display(&app_handle, true);
+                    }
+                }
             }
         })
         .build(app)
@@ -85,42 +93,45 @@ pub fn configure_shell(app: &AppHandle) -> Result<(), String> {
 }
 
 fn post_command_v() -> Result<(), String> {
-    const COMMAND_KEY_CODE: CGKeyCode = 55;
     const V_KEY_CODE: CGKeyCode = 9;
+    // 0x000008 sets the "left command key" bit — required by Electron apps and others
+    // that distinguish left vs right modifier keys. Matches Maccy & Flycut behavior.
+    const LEFT_COMMAND_BIT: u64 = 0x000008;
 
     let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
         .map_err(|_| "failed to create event source".to_string())?;
 
-    let command_down = CGEvent::new_keyboard_event(source.clone(), COMMAND_KEY_CODE, true)
-        .map_err(|_| "failed to create command down event".to_string())?;
-    let v_down = CGEvent::new_keyboard_event(source.clone(), V_KEY_CODE, true)
-        .map_err(|_| "failed to create v down event".to_string())?;
-    let v_up = CGEvent::new_keyboard_event(source.clone(), V_KEY_CODE, false)
-        .map_err(|_| "failed to create v up event".to_string())?;
-    let command_up = CGEvent::new_keyboard_event(source, COMMAND_KEY_CODE, false)
-        .map_err(|_| "failed to create command up event".to_string())?;
+    let cmd_flag =
+        CGEventFlags::CGEventFlagCommand | CGEventFlags::from_bits_truncate(LEFT_COMMAND_BIT);
 
-    v_down.set_flags(CGEventFlags::CGEventFlagCommand);
-    v_up.set_flags(CGEventFlags::CGEventFlagCommand);
+    let key_down = CGEvent::new_keyboard_event(source.clone(), V_KEY_CODE, true)
+        .map_err(|_| "failed to create key down event".to_string())?;
+    key_down.set_flags(cmd_flag);
 
-    command_down.post(CGEventTapLocation::HID);
-    v_down.post(CGEventTapLocation::HID);
-    v_up.post(CGEventTapLocation::HID);
-    command_up.post(CGEventTapLocation::HID);
+    let key_up = CGEvent::new_keyboard_event(source, V_KEY_CODE, false)
+        .map_err(|_| "failed to create key up event".to_string())?;
+    key_up.set_flags(cmd_flag);
+
+    key_down.post(CGEventTapLocation::Session);
+    key_up.post(CGEventTapLocation::Session);
     Ok(())
 }
 
-pub fn paste_into_previous_application(state: &ClipboardState) {
+pub fn paste_into_previous_application(app: &AppHandle, state: &ClipboardState) {
     let target_pid = state
         .last_target_app_pid
         .lock()
         .ok()
         .and_then(|guard| *guard);
 
+    if let Some(pid) = target_pid {
+        crate::window::yield_activation_to(app, pid);
+    }
+
     thread::spawn(move || {
         if let Some(pid) = target_pid {
             let _ = crate::window::activate_application(pid);
-            thread::sleep(Duration::from_millis(120));
+            thread::sleep(Duration::from_millis(150));
         }
         let _ = post_command_v();
     });

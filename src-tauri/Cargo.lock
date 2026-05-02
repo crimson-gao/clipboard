@@ -83,6 +83,7 @@ dependencies = [
  "chrono",
  "clipboard-rs",
  "clipboard-watcher",
+ "core-foundation",
  "core-graphics",
  "futures-util",
  "html2text",

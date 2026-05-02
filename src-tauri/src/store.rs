@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
@@ -47,7 +47,7 @@ pub struct ClipboardState {
     path: PathBuf,
     inner: Mutex<PersistedStore>,
     pub thumbnail_cache: Mutex<HashMap<String, Vec<u8>>>,
-    pub last_target_app_pid: Mutex<Option<i32>>,
+    pub last_target_app_pid: Arc<Mutex<Option<i32>>>,
 }
 
 impl ClipboardState {
@@ -63,7 +63,7 @@ impl ClipboardState {
             path,
             inner: Mutex::new(inner),
             thumbnail_cache: Mutex::new(HashMap::new()),
-            last_target_app_pid: Mutex::new(None),
+            last_target_app_pid: Arc::new(Mutex::new(None)),
         };
 
         if changed {

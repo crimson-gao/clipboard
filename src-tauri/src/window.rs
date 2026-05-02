@@ -6,8 +6,8 @@ use tauri::{
 
 use objc2::MainThreadMarker;
 use objc2_app_kit::{
-    NSApplicationActivationOptions, NSEvent, NSMainMenuWindowLevel, NSRunningApplication, NSScreen,
-    NSWindow, NSWindowCollectionBehavior, NSWorkspace,
+    NSApplication, NSApplicationActivationOptions, NSEvent, NSMainMenuWindowLevel,
+    NSRunningApplication, NSScreen, NSWindow, NSWindowCollectionBehavior, NSWorkspace,
 };
 use objc2_foundation::{NSPoint, NSRect};
 
@@ -70,35 +70,53 @@ fn current_process_pid() -> i32 {
 }
 
 fn frontmost_application_pid() -> Option<i32> {
-    let workspace = NSWorkspace::sharedWorkspace();
-    workspace
+    NSWorkspace::sharedWorkspace()
         .frontmostApplication()
-        .map(|application| application.processIdentifier())
+        .map(|app| app.processIdentifier())
 }
 
-pub fn remember_frontmost_application(state: &ClipboardState) -> Result<(), String> {
+pub fn remember_frontmost_application(state: &ClipboardState) {
     let pid = frontmost_application_pid().filter(|pid| *pid != current_process_pid());
-    let mut last_target_app_pid = state
-        .last_target_app_pid
-        .lock()
-        .map_err(|error| error.to_string())?;
-    *last_target_app_pid = pid;
-    Ok(())
+    if let Some(pid) = pid {
+        if let Ok(mut guard) = state.last_target_app_pid.lock() {
+            *guard = Some(pid);
+        }
+    }
+}
+
+pub fn start_frontmost_app_tracker(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        let state = app.state::<ClipboardState>();
+        remember_frontmost_application(&state);
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    });
+}
+
+pub fn yield_activation_to(app: &AppHandle, pid: i32) {
+    let app_handle = app.clone();
+    let _ = app_handle.run_on_main_thread(move || {
+        let Some(target) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+        else {
+            return;
+        };
+        if let Some(mtm) = MainThreadMarker::new() {
+            let ns_app = NSApplication::sharedApplication(mtm);
+            ns_app.yieldActivationToApplication(&target);
+        }
+    });
 }
 
 pub fn activate_application(pid: i32) -> Result<bool, String> {
-    let Some(application) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
-    else {
+    let Some(target) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) else {
         return Ok(false);
     };
-    Ok(application.activateWithOptions(NSApplicationActivationOptions::empty()))
+
+    #[allow(deprecated)]
+    let options = NSApplicationActivationOptions::ActivateIgnoringOtherApps;
+    Ok(target.activateWithOptions(options))
 }
 
-pub fn open_main_window(app: &AppHandle, remember_target: bool) {
-    if remember_target {
-        let state = app.state::<ClipboardState>();
-        let _ = remember_frontmost_application(&state);
-    }
+pub fn open_main_window(app: &AppHandle, _remember_target: bool) {
     if let Ok(window) = main_window(app) {
         let auto_hide = should_auto_hide_main_window(app);
         let _ = apply_main_window_overlay(app, auto_hide);
@@ -240,4 +258,24 @@ pub fn open_settings_window(app: &AppHandle) -> Result<(), String> {
         .build()
         .map(|_| ())
         .map_err(|error| error.to_string())
+}
+
+pub fn request_accessibility_if_needed() {
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXIsProcessTrustedWithOptions(options: *const std::ffi::c_void) -> bool;
+    }
+
+    use core_foundation::base::TCFType;
+    use core_foundation::boolean::CFBoolean;
+    use core_foundation::dictionary::CFDictionary;
+    use core_foundation::string::CFString;
+
+    let key = CFString::new("AXTrustedCheckOptionPrompt");
+    let value = CFBoolean::true_value();
+    let options = CFDictionary::from_CFType_pairs(&[(key.clone(), value)]);
+
+    unsafe {
+        AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef() as *const _);
+    }
 }

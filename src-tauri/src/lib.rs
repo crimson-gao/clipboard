@@ -20,7 +20,8 @@ use store::ClipboardState;
 use tauri::{ActivationPolicy, Manager, WindowEvent};
 use window::{
     close_main_window, configure_main_window_overlay, open_about_window,
-    open_settings_window as open_settings_window_ui, should_auto_hide_main_window,
+    open_settings_window as open_settings_window_ui, request_accessibility_if_needed,
+    should_auto_hide_main_window, start_frontmost_app_tracker,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -61,12 +62,14 @@ pub fn run() {
         })
         .setup(|app| {
             app.set_activation_policy(ActivationPolicy::Accessory);
+            request_accessibility_if_needed();
 
             let state = ClipboardState::load(app.handle())?;
             app.manage(state);
             configure_main_window_overlay(app.handle());
             clipboard::start_clipboard_watcher(app.handle().clone());
             clipboard::start_cleanup_scheduler(app.handle().clone());
+            start_frontmost_app_tracker(app.handle().clone());
             if let Err(error) = configure_shell(app.handle()) {
                 eprintln!("[shell] failed to configure shell integrations: {error}");
             }

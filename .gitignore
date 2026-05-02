@@ -13,3 +13,8 @@ coverage
 playwright-report
 test-results
 src-tauri/target
+docs
+.claude
+.codex
+.vscode
+.idea
